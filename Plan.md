@@ -11,18 +11,19 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-1 Step 5 `CoreGlobal`** 시작 전 |
-| 완료 | Phase 0 / Phase 1-1 Step 1~4 (Types, CoreMacro, CoreTLS, ThreadManager) |
-| 남은 숙제 | Step 4 확인 질문 2개 미답변 ↓ |
+| 현재 위치 | **Phase 1-1 Step 5 `CoreGlobal`** 코드 완료, 확인 질문 남음 |
+| 완료 | Phase 0 / Phase 1-1 Step 1~5 (Types, CoreMacro, CoreTLS, ThreadManager, CoreGlobal) |
+| 남은 숙제 | Step 5 확인 질문 2개 미답변 ↓ |
 
-**Step 4 확인 질문 (미답변)**
-1. `InitTLS`에서 `Atomic` 대신 일반 `static uint32`로 `SThreadId++`를 하면 어떤 문제가 생길 수 있나?
-2. `Launch`의 람다를 `[&]`로 바꾸면 왜 위험한가? 테스트의 `[&coutLock]`은 왜 괜찮은가?
+**Step 5 확인 질문 (미답변)**
+1. 헤더에 `ThreadManager* GThreadManager = nullptr;`처럼 정의를 바로 쓰면, 여러 .cpp가 include할 때 어떤 일이 생기나? (`extern`이 왜 필요한가)
+2. 소멸자에서 `delete GThreadManager;`를 다른 매니저보다 먼저 하는 이유는?
 
 **다음에 할 일**
-1. Step 4 확인 질문 답변 → Claude가 확인
-2. Step 5 `CoreGlobal`: `GThreadManager` 전역 포인터 + 생성/소멸 담당 `CoreGlobal` 전역 객체 (정적 라이브러리에서 .obj가 링크에서 빠지는 함정 주의)
-3. Step 6 `CorePch` 정리 + 스레드 테스트 (GameServer 테스트 코드 정리, `std::thread` 사용부의 간접 include 의존 정리)
+1. Step 5 확인 질문 답변 → Claude가 확인
+2. Step 6 `CorePch` 정리 + 스레드 테스트 (GameServer 테스트 코드 정리, `std::thread` 사용부의 간접 include 의존 정리)
+
+**참고**: `CoreGlobal`은 전역 객체가 아니라 `main` 첫 줄의 지역 객체로 생성한다 (정적 lib .obj 누락 방지, 초기화 시점 제어). 클라이언트에서는 `NetworkManager` 멤버로 둔다.
 
 > 이 섹션은 Step이 끝날 때마다 갱신한다.
 
@@ -116,7 +117,7 @@ Phase 9  포트폴리오 정리
 - [x] Step 2 `CRASH` / `ASSERT_CRASH` (2층 구조, `do { } while (0)`, volatile, `#expr`), `OUT`
 - [x] Step 3 `CoreTLS` (`LThreadId`만. 나머지 TLS는 해당 Phase에서 추가)
 - [x] Step 4 `ThreadManager` (Launch / Join / InitTLS / DestroyTLS, 멤버 `lock_`, `threads_`)
-- [ ] Step 5 `CoreGlobal` (전역 매니저 생성/소멸 순서)
+- [x] Step 5 `CoreGlobal` (전역 매니저 생성/소멸 순서, `main`의 지역 객체로 생성, 복사 금지 + 중복 생성 ASSERT)
 - [ ] Step 6 `CorePch` 정리 + 스레드 테스트
 - 미룬 항목: Lock 매크로(`USE_LOCK`/`READ_LOCK`/`WRITE_LOCK`) → 1-2, `LLockStack` → 1-2, `LSendBufferChunk` → 1-5, `LEndTickCount`/`LCurrentJobQueue` → 1-6
 
