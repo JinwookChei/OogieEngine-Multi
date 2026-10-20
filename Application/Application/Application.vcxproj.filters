@@ -1,0 +1,132 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Precompiled Header">
+      <UniqueIdentifier>{be9ff6f7-27a6-4da6-aa85-011d3227fa05}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface">
+      <UniqueIdentifier>{7875eff5-7db0-467f-883b-4e0bd2e83229}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Main">
+      <UniqueIdentifier>{f5f792df-c50a-4399-951e-94971aab11f8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Windows">
+      <UniqueIdentifier>{099cc0e8-6ba1-44a4-8339-6441f8faf3d3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{798580fb-1e54-4170-a2d3-7bf4cd1ca17b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Application">
+      <UniqueIdentifier>{b533fae7-746c-440a-bf46-1258e3f98a0c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Editor">
+      <UniqueIdentifier>{04e0d8a9-ebce-4e4f-a0fe-c06f2169a41d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Renderer">
+      <UniqueIdentifier>{6c775c0f-9123-4226-ac2b-5179abe1cbd7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Asset">
+      <UniqueIdentifier>{db31113c-388d-4420-8eff-7ed1a0f813c5}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Precompiled Header</Filter>
+    </ClInclude>
+    <ClInclude Include="WindowsApplication.h">
+      <Filter>Source Files\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="Window.h">
+      <Filter>Source Files\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\GeometryType\GeometryType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\MathType\MathType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\VertexType\VertexType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Application\IApplication.h">
+      <Filter>Interface\Application</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\EditorBindObject\IEditorBindObject.h">
+      <Filter>Interface\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Editor\IEditor.h">
+      <Filter>Interface\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMaterial.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMesh.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IParticle.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IPSO.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRasterizer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderResourceFactory.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderTarget.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IShader.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\ITexture.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Animation.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Particle.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Model.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Skeleton.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\ActorType\ActorType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Precompiled Header</Filter>
+    </ClCompile>
+    <ClCompile Include="WindowsApplication.cpp">
+      <Filter>Source Files\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="Window.cpp">
+      <Filter>Source Files\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files\Main</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

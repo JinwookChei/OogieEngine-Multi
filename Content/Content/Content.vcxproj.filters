@@ -1,0 +1,225 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Precompiled Header">
+      <UniqueIdentifier>{685bfa00-634b-4108-a7ca-d4586244d7d7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface">
+      <UniqueIdentifier>{86385d27-0590-4756-9799-4a11dad60f78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Main">
+      <UniqueIdentifier>{5ea1ba14-4ef9-47b9-b9a5-75aa77e5d1a6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Game">
+      <UniqueIdentifier>{a7950b2c-9e25-4da6-9ff6-e33ad004e91e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Game\Level">
+      <UniqueIdentifier>{ed6f411c-b199-44c6-88dd-38ea1f49e55d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Game\Actors">
+      <UniqueIdentifier>{666af89b-d60b-481b-a9cf-f8ef1c2c1c49}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Game\Actors\Camera">
+      <UniqueIdentifier>{f94cdf62-c46f-4f33-88a4-9c2c7ffefa78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{8779a39e-25ba-4449-bf38-64a2f9512098}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Game\Actors\Player">
+      <UniqueIdentifier>{bc34bcd1-d4f1-45e7-a820-ab3b7703bf00}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Renderer">
+      <UniqueIdentifier>{ed3d985b-870c-416f-8d22-5eec9f104c10}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Application">
+      <UniqueIdentifier>{9fc3ce05-cb8c-474e-8667-53e0d59a215a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Editor">
+      <UniqueIdentifier>{485d940f-e62f-4bad-bf70-897ff389900b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Asset">
+      <UniqueIdentifier>{95404e3e-337c-432a-82b8-f003d7b7e6a3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Game\Actors\Static">
+      <UniqueIdentifier>{af1e4831-6e19-4f0d-892d-dbe4ef5b91b7}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Precompiled Header</Filter>
+    </ClCompile>
+    <ClCompile Include="ContentManager.cpp">
+      <Filter>Source Files\Main</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Source Files\Main</Filter>
+    </ClCompile>
+    <ClCompile Include="StartLevel.cpp">
+      <Filter>Source Files\Game\Level</Filter>
+    </ClCompile>
+    <ClCompile Include="MoveCamera.cpp">
+      <Filter>Source Files\Game\Actors\Camera</Filter>
+    </ClCompile>
+    <ClCompile Include="TestPlayer.cpp">
+      <Filter>Source Files\Game\Actors\Player</Filter>
+    </ClCompile>
+    <ClCompile Include="WereWolf.cpp">
+      <Filter>Source Files\Game\Actors\Player</Filter>
+    </ClCompile>
+    <ClCompile Include="TestActor.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+    <ClCompile Include="Sphere.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+    <ClCompile Include="ParticleActor.cpp">
+      <Filter>Source Files\Game\Actors</Filter>
+    </ClCompile>
+    <ClCompile Include="Floor.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+    <ClCompile Include="ColorCube.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+    <ClCompile Include="ColorSphere.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+    <ClCompile Include="PortfolioLevel.cpp">
+      <Filter>Source Files\Game\Level</Filter>
+    </ClCompile>
+    <ClCompile Include="BricksCube.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+    <ClCompile Include="House.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+    <ClCompile Include="Tree.cpp">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Precompiled Header</Filter>
+    </ClInclude>
+    <ClInclude Include="ContentManager.h">
+      <Filter>Source Files\Main</Filter>
+    </ClInclude>
+    <ClInclude Include="StartLevel.h">
+      <Filter>Source Files\Game\Level</Filter>
+    </ClInclude>
+    <ClInclude Include="MoveCamera.h">
+      <Filter>Source Files\Game\Actors\Camera</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\GeometryType\GeometryType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\VertexType\VertexType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="TestPlayer.h">
+      <Filter>Source Files\Game\Actors\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="WereWolf.h">
+      <Filter>Source Files\Game\Actors\Player</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Editor\IEditor.h">
+      <Filter>Interface\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\EditorBindObject\IEditorBindObject.h">
+      <Filter>Interface\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Application\IApplication.h">
+      <Filter>Interface\Application</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMaterial.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMesh.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IParticle.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRasterizer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderResourceFactory.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderTarget.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\ITexture.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IPSO.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IShader.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Model.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Animation.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Skeleton.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\MathType\MathType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="TestActor.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+    <ClInclude Include="Sphere.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+    <ClInclude Include="ParticleActor.h">
+      <Filter>Source Files\Game\Actors</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Particle.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\ActorType\ActorType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Floor.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+    <ClInclude Include="ColorCube.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+    <ClInclude Include="ColorSphere.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+    <ClInclude Include="PortfolioLevel.h">
+      <Filter>Source Files\Game\Level</Filter>
+    </ClInclude>
+    <ClInclude Include="BricksCube.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+    <ClInclude Include="House.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+    <ClInclude Include="Tree.h">
+      <Filter>Source Files\Game\Actors\Static</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

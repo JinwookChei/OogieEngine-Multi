@@ -1,0 +1,75 @@
+#pragma once
+
+#ifdef _DEBUG
+#define _CRTDBG_MAP_ALLOC
+#include <crtdbg.h>
+#define new new (_NORMAL_BLOCK, __FILE__, __LINE__)
+#endif  // _DEBUG
+
+
+#ifdef _DEBUG
+#define DEBUG_BREAK __debugbreak
+#else
+#define DEBUG_BREAK __noop
+#endif // DEBUG
+
+
+#ifndef UNICODE
+#define UNICODE
+#endif 
+
+#ifndef HID_USAGE_PAGE_GENERIC
+#define HID_USAGE_PAGE_GENERIC         ((USHORT) 0x01)
+#endif
+#ifndef HID_USAGE_GENERIC_MOUSE
+#define HID_USAGE_GENERIC_MOUSE        ((USHORT) 0x02)
+#endif
+
+#define UTILITY_API __declspec(dllexport)
+#define EDITOR_API __declspec(dllimport)
+
+#include <windows.h>
+#include <stdint.h>
+#include <windowsx.h>
+
+// STL
+#include <string>
+#include <map>
+#include <unordered_map>
+#include <vector>
+
+// Utility
+#include <Utility/Utility/Math.h>
+#include <Utility/Utility/LinkedList.h>
+
+// Common
+#include <Common/ActorType/ActorType.h>
+#include <Common/MathType/MathType.h>
+#include <Common/GeometryType/GeometryType.h>
+#include <Common/VertexType/VertexType.h>
+#include <Common/Asset/Skeleton.h>
+#include <Common/Asset/Model.h>
+#include <Common/Asset/Animation.h>
+#include <Common/Asset/Particle.h>
+
+
+// Interface
+#include <Interface/Application/IApplication.h>
+#include <Interface/Renderer/IMesh.h>
+#include <Interface/Renderer/IShader.h>
+#include <Interface/Renderer/ITexture.h>
+#include <Interface/Renderer/IMaterial.h>
+#include <Interface/Renderer/IRenderTarget.h>
+#include <Interface/Renderer/IRasterizer.h>
+#include <Interface/Renderer/IParticle.h>
+#include <Interface/Renderer/IPSO.h>
+#include <Interface/Renderer/IRenderResourceFactory.h>
+#include <Interface/Renderer/IRenderer.h>
+#include <Interface/EditorBindObject/IEditorBindObject.h>
+#include <Interface/Editor/IEditor.h>
+
+
+// Editor
+#include <Editor/Editor/EditorCore.h>
+
+extern class WindowsApplication* GApplication;

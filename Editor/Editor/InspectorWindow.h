@@ -1,0 +1,38 @@
+#pragma once
+class EditorWidget;
+class LightDetailWidget;
+class MaterialDetailWidget;
+class TransformWidget;
+class InspectorWindow
+	: public EditorWindow
+{
+public:
+	InspectorWindow();
+	~InspectorWindow() override;
+
+	static InspectorWindow* GInspectorWindow;
+	//void Init()  override;
+	//void OnUpdate() override;
+	//void OnRender() override;
+	//bool Init() override;
+	//void Update() override;
+	//void OnGUI() override;
+	//void Run() override;
+	//void OnEnable() override;
+	//void OnDisable() override;
+	//void OnDestroy() override;
+
+	
+	void Begin() override;
+	void End() override;
+
+protected:
+	void CleanUp();
+
+private:
+	TransformWidget* pTransformWidget_;
+
+	LightDetailWidget* pLightDetailWidget_;
+
+	MaterialDetailWidget* pMaterialDetailWidget_;
+};

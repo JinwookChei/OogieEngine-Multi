@@ -1,0 +1,305 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Precompiled Header">
+      <UniqueIdentifier>{c7f72a5c-d020-47a0-8917-e3f14425d1b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface">
+      <UniqueIdentifier>{079923c1-3509-46fe-a1c2-075f54a2eed3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Main">
+      <UniqueIdentifier>{9d0942b1-34fe-4929-bb74-929e26a710b1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Texture">
+      <UniqueIdentifier>{f11a2cae-7041-4461-98ec-123a01b48168}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Renderer">
+      <UniqueIdentifier>{b5546a92-9c00-44dc-9845-3e1340611cb8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Shader">
+      <UniqueIdentifier>{7c5da77f-27f9-4527-90da-9f3b73ab0602}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Rasterizer">
+      <UniqueIdentifier>{1aef9740-edc9-49e0-bea4-978dd6c9554c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Constant">
+      <UniqueIdentifier>{21c6ea67-e3d9-4ca3-a179-d51a63f6f5e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Mesh">
+      <UniqueIdentifier>{183def21-a8fd-4838-818f-944b4af7960c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Material">
+      <UniqueIdentifier>{5d59ba40-a1c0-4293-b587-76dfaa2ae70c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\RenderTarget">
+      <UniqueIdentifier>{847b08a2-6ad4-4ffc-93a7-e335bfa0c95f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="DirectXTex">
+      <UniqueIdentifier>{b8a7c758-f17b-4ba4-9261-125c2b007fe1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\State">
+      <UniqueIdentifier>{68e458d7-76d0-45f3-9723-5f9b775c9690}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{48720aec-ba2d-431d-881b-0c36d0fe5b3c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\RenderResourceFactory">
+      <UniqueIdentifier>{fb1138c7-9602-4cf7-83fb-410c79e9b57d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\PSO">
+      <UniqueIdentifier>{c8ded7cc-cb94-44e6-aad9-c49e342ff31e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Renderer">
+      <UniqueIdentifier>{23bd79d1-04fe-42c3-bdfd-a78045350235}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Resource Files\Shader">
+      <UniqueIdentifier>{f5e73942-5123-4c1a-90d1-6f1042e81644}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Shader\DebugShader">
+      <UniqueIdentifier>{6c774d14-347b-42ae-8bb0-f675d4174886}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Shader\PaticleShader">
+      <UniqueIdentifier>{6b0e954b-8b65-4103-93fc-add79e68067f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Shader\LightShader">
+      <UniqueIdentifier>{bbdec2bd-72d1-455b-b7d2-3c9f3fb4b5ca}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Asset">
+      <UniqueIdentifier>{cb88d587-c715-4e32-96f8-754727edd96f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Shader\DeferredPassShader">
+      <UniqueIdentifier>{a4b8f9b7-f4c3-44be-99cc-4f8137c80b4d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Shader\BlitShader">
+      <UniqueIdentifier>{583f11b5-007a-4aac-b3f8-a9ae0afe01db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Resource Files\Shader\AmbientShader">
+      <UniqueIdentifier>{624c26c3-03c6-4f65-96ca-23076c833d0d}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Precompiled Header</Filter>
+    </ClInclude>
+    <ClInclude Include="D3D11Renderer.h">
+      <Filter>Source Files\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="Texture.h">
+      <Filter>Source Files\Texture</Filter>
+    </ClInclude>
+    <ClInclude Include="Mesh.h">
+      <Filter>Source Files\Mesh</Filter>
+    </ClInclude>
+    <ClInclude Include="SamplerState.h">
+      <Filter>Source Files\State</Filter>
+    </ClInclude>
+    <ClInclude Include="Rasterizer.h">
+      <Filter>Source Files\Rasterizer</Filter>
+    </ClInclude>
+    <ClInclude Include="ConstantBuffer.h">
+      <Filter>Source Files\Constant</Filter>
+    </ClInclude>
+    <ClInclude Include="Material.h">
+      <Filter>Source Files\Material</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderTarget.h">
+      <Filter>Source Files\RenderTarget</Filter>
+    </ClInclude>
+    <ClInclude Include="DeferredTarget.h">
+      <Filter>Source Files\RenderTarget</Filter>
+    </ClInclude>
+    <ClInclude Include="Shader.h">
+      <Filter>Source Files\Shader</Filter>
+    </ClInclude>
+    <ClInclude Include="DepthState.h">
+      <Filter>Source Files\State</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\VertexType\VertexType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\MathType\MathType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\GeometryType\GeometryType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="RenderResourceFactory.h">
+      <Filter>Source Files\RenderResourceFactory</Filter>
+    </ClInclude>
+    <ClInclude Include="PipelineStateObject.h">
+      <Filter>Source Files\PSO</Filter>
+    </ClInclude>
+    <ClInclude Include="BlendState.h">
+      <Filter>Source Files\State</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\ITexture.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMaterial.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMesh.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IPSO.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRasterizer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderResourceFactory.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderTarget.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IShader.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Animation.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Model.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Skeleton.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Particle.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Precompiled Header</Filter>
+    </ClCompile>
+    <ClCompile Include="D3D11Renderer.cpp">
+      <Filter>Source Files\Renderer</Filter>
+    </ClCompile>
+    <ClCompile Include="Texture.cpp">
+      <Filter>Source Files\Texture</Filter>
+    </ClCompile>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files\Main</Filter>
+    </ClCompile>
+    <ClCompile Include="Mesh.cpp">
+      <Filter>Source Files\Mesh</Filter>
+    </ClCompile>
+    <ClCompile Include="SamplerState.cpp">
+      <Filter>Source Files\State</Filter>
+    </ClCompile>
+    <ClCompile Include="Rasterizer.cpp">
+      <Filter>Source Files\Rasterizer</Filter>
+    </ClCompile>
+    <ClCompile Include="ConstantBuffer.cpp">
+      <Filter>Source Files\Constant</Filter>
+    </ClCompile>
+    <ClCompile Include="Material.cpp">
+      <Filter>Source Files\Material</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderTarget.cpp">
+      <Filter>Source Files\RenderTarget</Filter>
+    </ClCompile>
+    <ClCompile Include="DeferredTarget.cpp">
+      <Filter>Source Files\RenderTarget</Filter>
+    </ClCompile>
+    <ClCompile Include="Shader.cpp">
+      <Filter>Source Files\Shader</Filter>
+    </ClCompile>
+    <ClCompile Include="DepthState.cpp">
+      <Filter>Source Files\State</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderResourceFactory.cpp">
+      <Filter>Source Files\RenderResourceFactory</Filter>
+    </ClCompile>
+    <ClCompile Include="PipelineStateObject.cpp">
+      <Filter>Source Files\PSO</Filter>
+    </ClCompile>
+    <ClCompile Include="BlendState.cpp">
+      <Filter>Source Files\State</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="DebugLineVS.hlsl">
+      <Filter>Resource Files\Shader\DebugShader</Filter>
+    </FxCompile>
+    <FxCompile Include="DebugLinePS.hlsl">
+      <Filter>Resource Files\Shader\DebugShader</Filter>
+    </FxCompile>
+    <FxCompile Include="ParticleVS.hlsl">
+      <Filter>Resource Files\Shader\PaticleShader</Filter>
+    </FxCompile>
+    <FxCompile Include="ParticleGS.hlsl">
+      <Filter>Resource Files\Shader\PaticleShader</Filter>
+    </FxCompile>
+    <FxCompile Include="ParticleCS.hlsl">
+      <Filter>Resource Files\Shader\PaticleShader</Filter>
+    </FxCompile>
+    <FxCompile Include="ParticlePS.hlsl">
+      <Filter>Resource Files\Shader\PaticleShader</Filter>
+    </FxCompile>
+    <FxCompile Include="StaticMeshVS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="StaticMeshPS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="LightVS.hlsl">
+      <Filter>Resource Files\Shader\LightShader</Filter>
+    </FxCompile>
+    <FxCompile Include="LightPS.hlsl">
+      <Filter>Resource Files\Shader\LightShader</Filter>
+    </FxCompile>
+    <FxCompile Include="BlitPS.hlsl">
+      <Filter>Resource Files\Shader\BlitShader</Filter>
+    </FxCompile>
+    <FxCompile Include="BlitVS.hlsl">
+      <Filter>Resource Files\Shader\BlitShader</Filter>
+    </FxCompile>
+    <FxCompile Include="SkinnedMeshVS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="SkinnedMeshPS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="SimpleMeshVS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="SimpleMeshPS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="ScaleAwareTilingVS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="ScaleAwareTilingPS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="StaticColorMeshVS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="StaticColorMeshPS.hlsl">
+      <Filter>Resource Files\Shader\DeferredPassShader</Filter>
+    </FxCompile>
+    <FxCompile Include="AmbientVS.hlsl">
+      <Filter>Resource Files\Shader\AmbientShader</Filter>
+    </FxCompile>
+    <FxCompile Include="AmbientPS.hlsl">
+      <Filter>Resource Files\Shader\AmbientShader</Filter>
+    </FxCompile>
+  </ItemGroup>
+</Project>

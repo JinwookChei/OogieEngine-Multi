@@ -1,0 +1,24 @@
+#pragma once
+
+class DirectionLight
+	: public Light
+{
+public:
+	ENGINE_API DirectionLight();
+
+	ENGINE_API ~DirectionLight() override;
+
+	void Tick(double deltaTime) override;
+
+	void BeginPlay() override;
+
+	LightRenderData GetData() override;
+
+	Float3 Direction() const;
+
+private:
+	void CleanUp() override;
+
+public:
+	ENGINE_API int __stdcall GetLightTypeForEditor() const override;
+};

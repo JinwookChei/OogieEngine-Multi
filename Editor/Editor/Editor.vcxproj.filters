@@ -1,0 +1,294 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;c++;cppm;ixx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;h++;hm;inl;inc;ipp;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="Precompiled Header">
+      <UniqueIdentifier>{2df436e1-5715-41b9-b58f-f1e80c412588}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface">
+      <UniqueIdentifier>{34cbf8f8-30f3-47ca-8a2a-cc3c43527b43}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="EditSource">
+      <UniqueIdentifier>{a7e63b4a-4906-438c-978f-a6ef6088d0bc}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="EditSource\ImGuizmo">
+      <UniqueIdentifier>{dc139cda-5f5e-4317-8d5e-0f6c3cb625f7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="EditSource\ImGui">
+      <UniqueIdentifier>{6fe50b87-e016-4125-831c-6ffc62db153e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Main">
+      <UniqueIdentifier>{969c25bb-10d2-43f4-8d76-85097268a2eb}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\FF">
+      <UniqueIdentifier>{e0015cb8-30fb-4d97-9a64-d65222f8bb6a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Label">
+      <UniqueIdentifier>{3fd66fcc-0f1e-41ef-bb39-73a71fb585e8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\EditorCore">
+      <UniqueIdentifier>{c965b0bf-6f76-46ea-8749-092da09d9cf1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\EditorCore\EditorContext">
+      <UniqueIdentifier>{1963a738-abe9-4f8e-96f9-502c5d8565f0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common">
+      <UniqueIdentifier>{8d9c511e-226a-4257-899e-831095a02690}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Application">
+      <UniqueIdentifier>{db4e8ea1-b670-41a3-b16b-5eb293d4ed04}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Editor">
+      <UniqueIdentifier>{ad23aca2-c45b-4216-ad20-fe03203f5e5f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Interface\Renderer">
+      <UniqueIdentifier>{a179e71d-da38-406e-84ba-8cd97a77a204}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Common\Asset">
+      <UniqueIdentifier>{ab85377b-71b4-40ac-93df-10790b42c17f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\FF\EditorWindow">
+      <UniqueIdentifier>{60193d21-0461-4ea1-af01-ace073ad7865}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\FF\EditorWindow\EditorWidget">
+      <UniqueIdentifier>{e8301c84-6779-4a92-b6d2-2d47ebf909f3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\FF\Windows">
+      <UniqueIdentifier>{d8ac8ed5-42ea-425f-9407-d4031f7e4fdd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\FF\Widgets">
+      <UniqueIdentifier>{7c67170a-693d-43b0-bf98-12bb5e4d4a81}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Precompiled Header</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imconfig.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imgui.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imgui_impl_dx11.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imgui_impl_win32.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imgui_internal.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imstb_rectpack.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imstb_textedit.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\Imgui2\imstb_truetype.h">
+      <Filter>EditSource\ImGui</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\ImguiGizmo\GraphEditor.h">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\ImguiGizmo\ImCurveEdit.h">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\ImguiGizmo\ImGradient.h">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\ImguiGizmo\ImGuizmo.h">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\ImguiGizmo\ImSequencer.h">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\ThirdParty\ImguiGizmo\ImZoomSlider.h">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClInclude>
+    <ClInclude Include="EditorCore.h">
+      <Filter>Source Files\EditorCore</Filter>
+    </ClInclude>
+    <ClInclude Include="EditorWindow.h">
+      <Filter>Source Files\FF\EditorWindow</Filter>
+    </ClInclude>
+    <ClInclude Include="EditorWidget.h">
+      <Filter>Source Files\FF\EditorWindow\EditorWidget</Filter>
+    </ClInclude>
+    <ClInclude Include="EditorContext.h">
+      <Filter>Source Files\EditorCore\EditorContext</Filter>
+    </ClInclude>
+    <ClInclude Include="Label.h">
+      <Filter>Source Files\Label</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\VertexType\VertexType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\MathType\MathType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\GeometryType\GeometryType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Editor\IEditor.h">
+      <Filter>Interface\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\EditorBindObject\IEditorBindObject.h">
+      <Filter>Interface\Editor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Application\IApplication.h">
+      <Filter>Interface\Application</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMaterial.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IMesh.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IParticle.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRasterizer.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderResourceFactory.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IRenderTarget.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\ITexture.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IPSO.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Interface\Renderer\IShader.h">
+      <Filter>Interface\Renderer</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Animation.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Model.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Particle.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\Asset\Skeleton.h">
+      <Filter>Common\Asset</Filter>
+    </ClInclude>
+    <ClInclude Include="InspectorWindow.h">
+      <Filter>Source Files\FF\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="SceneWindow.h">
+      <Filter>Source Files\FF\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="TransformWidget.h">
+      <Filter>Source Files\FF\Widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="GBufferViewerWindow.h">
+      <Filter>Source Files\FF\Windows</Filter>
+    </ClInclude>
+    <ClInclude Include="..\..\Common\ActorType\ActorType.h">
+      <Filter>Common</Filter>
+    </ClInclude>
+    <ClInclude Include="LightDetailWidget.h">
+      <Filter>Source Files\FF\Widgets</Filter>
+    </ClInclude>
+    <ClInclude Include="MaterialDetailWidget.h">
+      <Filter>Source Files\FF\Widgets</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.cpp">
+      <Filter>Precompiled Header</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\Imgui2\imgui.cpp">
+      <Filter>EditSource\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\Imgui2\imgui_demo.cpp">
+      <Filter>EditSource\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\Imgui2\imgui_draw.cpp">
+      <Filter>EditSource\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\Imgui2\imgui_impl_dx11.cpp">
+      <Filter>EditSource\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\Imgui2\imgui_impl_win32.cpp">
+      <Filter>EditSource\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\Imgui2\imgui_tables.cpp">
+      <Filter>EditSource\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\Imgui2\imgui_widgets.cpp">
+      <Filter>EditSource\ImGui</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\ImguiGizmo\GraphEditor.cpp">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\ImguiGizmo\ImCurveEdit.cpp">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\ImguiGizmo\ImGradient.cpp">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\ImguiGizmo\ImGuizmo.cpp">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClCompile>
+    <ClCompile Include="..\..\ThirdParty\ImguiGizmo\ImSequencer.cpp">
+      <Filter>EditSource\ImGuizmo</Filter>
+    </ClCompile>
+    <ClCompile Include="dllmain.cpp">
+      <Filter>Source Files\Main</Filter>
+    </ClCompile>
+    <ClCompile Include="EditorCore.cpp">
+      <Filter>Source Files\EditorCore</Filter>
+    </ClCompile>
+    <ClCompile Include="EditorWindow.cpp">
+      <Filter>Source Files\FF\EditorWindow</Filter>
+    </ClCompile>
+    <ClCompile Include="EditorWidget.cpp">
+      <Filter>Source Files\FF\EditorWindow\EditorWidget</Filter>
+    </ClCompile>
+    <ClCompile Include="EditorContext.cpp">
+      <Filter>Source Files\EditorCore\EditorContext</Filter>
+    </ClCompile>
+    <ClCompile Include="Label.cpp">
+      <Filter>Source Files\Label</Filter>
+    </ClCompile>
+    <ClCompile Include="InspectorWindow.cpp">
+      <Filter>Source Files\FF\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="SceneWindow.cpp">
+      <Filter>Source Files\FF\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="TransformWidget.cpp">
+      <Filter>Source Files\FF\Widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="GBufferViewerWindow.cpp">
+      <Filter>Source Files\FF\Windows</Filter>
+    </ClCompile>
+    <ClCompile Include="LightDetailWidget.cpp">
+      <Filter>Source Files\FF\Widgets</Filter>
+    </ClCompile>
+    <ClCompile Include="MaterialDetailWidget.cpp">
+      <Filter>Source Files\FF\Widgets</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

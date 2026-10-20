@@ -1,0 +1,128 @@
+#pragma once
+
+struct CBPerFrame
+{
+	Float4x4 view;
+	Float4x4 projection;
+	Float4x4 inverseView;
+	Float4x4 inverseProjection;
+	Float2 screenOffset;
+	Float2 screenScale;
+	Float2 screenResolution;
+	Float2 pad0;
+	Float4 camPos;
+};
+
+struct CBPerObject
+{
+	Float4x4 worldMatrix;
+	Float4x4 normalMatrix;
+	Float4 scale;
+	Float3 materialSpecular;
+	float materialShineness;
+};
+
+struct CBPerLight
+{
+	Color lightDiffuse;
+	Color lightSpecular;
+	Color lightAmbient;
+	Float3 direction_D_S; // Spot, DirectionÀÌ¶û °øÀ¯.
+	float range_S_P;
+	Float3 position_S_P;
+	float smooth_S;
+	float innerAngle_S;
+	float outerAngle_S;
+	float attenuationConst_S_P;
+	float attenuationLinear_S_P;
+	float attenuationQuad_S_P;
+
+	// 0 -> DirectionLight
+	// 1 -> SpotLight
+	// 2 -> PointLight
+	float lightType;
+	float lightIntensity;
+	float pad;
+};
+
+struct CBPerComputeParticle
+{
+	float deltaTime;
+	uint32_t particleNum;
+	float accTime;
+	uint32_t particleType;
+};
+
+struct CBPerParticle
+{
+	Float4x4 world;
+	Float4x4 viewProj;
+	Float3 cameraRight;
+	float startSize;
+	Float3 cameraUp;
+	float endSize;
+	Float4 startColor;
+	Float4 endColor;
+};
+
+struct CBPerAnimation
+{
+	Float4x4 boneTransforms[200];
+};
+
+
+struct CBPerMaterial
+{
+	Float3 materialSpecular;
+	float materialShineness;
+};
+
+
+class ConstantBuffer final
+	: public IUnknown
+{
+private:
+	friend Renderer;
+
+	ConstantBuffer();
+
+	virtual ~ConstantBuffer();
+
+	bool Init(ID3D11Buffer* pBuffer);
+
+	bool Init(uint32_t bufferSize);
+
+public:
+	HRESULT __stdcall QueryInterface(REFIID riid, _COM_Outptr_ void __RPC_FAR* __RPC_FAR* ppvObject) override;
+
+	ULONG __stdcall AddRef() override;
+
+	ULONG __stdcall Release() override;
+
+	void Update(void* pSrcData);
+
+	void BindConstantBufferCS(UINT slot);
+	void BindConstantBufferVS(UINT slot);
+	void BindConstantBufferGS(UINT slot);
+	void BindConstantBufferPS(UINT slot);
+
+private:
+	void CleanUp();
+
+	ULONG refCount_;
+
+	ID3D11Buffer* pBuffer_;
+
+public:
+	static void InitGlobalConstant();
+	static void ShutDown();
+	static ConstantBuffer* Create(uint32_t bufferSize);
+	static ConstantBuffer* GConstantPerFrame;
+	static ConstantBuffer* GConstantPerObject;
+	static ConstantBuffer* GConstantPerLight;
+	static ConstantBuffer* GConstantPerComputeParticle;
+	static ConstantBuffer* GConstantPerRenderParticle;
+	static ConstantBuffer* GConstantPerAnimation;
+	static ConstantBuffer* GConstantPerMaterial;
+};
+

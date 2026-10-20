@@ -1,0 +1,272 @@
+#include "stdafx.h"
+#include "Transform.h"
+#include "GeometryGenerator.h"
+#include "Camera.h"
+
+Camera::Camera()
+	: fov_(DEFAULT_FOV)
+	, near_(DEFAULT_NEAR)
+	, far_(DEFAULT_FAR)
+	, cameraSensitivity_(10.0f)
+	, cameraSpeed_(2.0f)
+	, screenOffset_({ 0.0f, 0.0f })
+	, screenScale_({ 1.0f, 1.0f })
+	, pCurrentRenderTarget_(nullptr)
+	, pGBufferRenderTarget_(nullptr)
+	, pFinalRenderTarget_(nullptr)
+{
+	MATH::MatrixIdentity(view_);
+	MATH::MatrixIdentity(projection_);
+
+	InitGBufferRenderTarget();
+	InitFianlRenderTarget();
+}
+
+Camera::~Camera()
+{
+	CleanUp();
+}
+
+void Camera::Tick(double deltaTime)
+{
+	Actor::Tick(deltaTime);
+}
+
+void Camera::BeginPlay()
+{
+	pTransform_->SetScale({ 1.0f, 1.0f, 1.0f, 0.0f });
+	pTransform_->SetRotation({ 0.0f, 0.0f, 0.0f, 0.0f });
+	pTransform_->SetPosition({ -10.0f, 0.0f, 0.0f, 1.0f });
+}
+
+void Camera::Render()
+{
+	Actor::Render();
+}
+
+const Float4x4& Camera::View() const
+{
+	return view_;
+}
+
+const Float4x4& Camera::Projection() const
+{
+	return projection_;
+}
+
+void Camera::SetSize(const Float2& size)
+{
+	// 주의!! SetSize하는데 렌더 타겟이 없으면 크래쉬 발생유도.
+	if (nullptr == pGBufferRenderTarget_)
+	{
+		Assert("pGBufferTarget_ == NULL!");
+		return;
+	}
+
+	RenderTargetDesc desc = pGBufferRenderTarget_->GetDesc();
+	pGBufferRenderTarget_->Release();
+	pGBufferRenderTarget_ = nullptr;
+
+	desc.size_ = size;
+	pGBufferRenderTarget_ = Renderer::GetFactory()->CreateRenderTarget(desc);
+}
+
+
+void Camera::SetConfig(float fov, float Near, float Far)
+{
+	fov_ = fov;
+	near_ = Near;
+	far_ = Far;
+}
+
+float Camera::GetFov() const
+{
+	return fov_;
+}
+
+float Camera::GetNear() const
+{
+	return near_;
+}
+
+float Camera::GetFar() const
+{
+	return far_;
+}
+
+void Camera::SetClearColor(const Color& clearColor)
+{
+	pGBufferRenderTarget_->SetClearColor(clearColor);
+}
+
+void Camera::SetScreenPlacement(const Float2& screenOffset, const Float2& screenScale)
+{
+	screenOffset_ = screenOffset;
+	screenScale_ = screenScale;
+}
+
+Float2 Camera::GetRenderSize() const
+{
+	return pGBufferRenderTarget_->GetSize();
+}
+
+IRenderTarget* Camera::GetGBufferTarget() const
+{
+	return pGBufferRenderTarget_;
+}
+
+void Camera::UpdatePerFrameConstant()
+{
+	CameraTransformUpdate();
+
+	CameraFrameData frameData;
+	frameData.view = view_;
+	frameData.projection = projection_;
+	frameData.screenOffset = screenOffset_;
+	frameData.screenScale = screenScale_;
+	frameData.screenResolution = pGBufferRenderTarget_->GetSize();
+	frameData.camPos = pTransform_->GetPosition();
+
+	Renderer::Instance()->UpdateCameraFrame(frameData);
+}
+
+void Camera::RenderPassBegin(E_RENDER_PASS_TYPE renderPassType)
+{
+	switch (renderPassType)
+	{
+	case E_RENDER_PASS_TYPE::GeometryPass:
+	{
+		pGBufferRenderTarget_->Clear();
+		pGBufferRenderTarget_->Bind();
+		pCurrentRenderTarget_ = pGBufferRenderTarget_;
+		break;
+	}
+	case E_RENDER_PASS_TYPE::AmbientPass:
+	{
+		pFinalRenderTarget_->Clear();
+		pFinalRenderTarget_->Bind();
+		pCurrentRenderTarget_ = pFinalRenderTarget_;
+	}
+	case E_RENDER_PASS_TYPE::LightPass:
+	{
+		pFinalRenderTarget_->Bind();
+		pCurrentRenderTarget_ = pFinalRenderTarget_;
+		break;
+	}
+	case E_RENDER_PASS_TYPE::ParticlePass:
+	{
+		ITexture* pDepthTexture = pGBufferRenderTarget_->GetRenderTexture(E_RENDER_TEXTURE_TYPE::Depth);
+		if (nullptr == pDepthTexture)
+		{
+			DEBUG_BREAK();
+		}
+
+		pFinalRenderTarget_->Bind(pDepthTexture);
+		pCurrentRenderTarget_ = pFinalRenderTarget_;
+		break;
+	}
+	case E_RENDER_PASS_TYPE::DebugPass:
+	{
+		ITexture* pDepthTexture = pGBufferRenderTarget_->GetRenderTexture(E_RENDER_TEXTURE_TYPE::Depth);
+		if (nullptr == pDepthTexture)
+		{
+			DEBUG_BREAK();
+		}
+
+		pFinalRenderTarget_->Bind(pDepthTexture);
+		pCurrentRenderTarget_ = pFinalRenderTarget_;
+		break;
+	}
+	default:
+		break;
+	}
+}
+
+void Camera::RenderPassEnd()
+{
+	if (nullptr == pCurrentRenderTarget_)
+	{
+		DEBUG_BREAK();
+		return;
+	}
+	pCurrentRenderTarget_->UnBind();
+	pCurrentRenderTarget_ = nullptr;
+}
+
+bool Camera::InitGBufferRenderTarget()
+{
+	RenderTargetDesc gBufferDesc(E_RENDER_TECHNIQUE_TYPE::Deferred);
+	gBufferDesc.size_ = { DEFAULT_SCREEN_WIDTH , DEFAULT_SCREEN_HEIGHT };
+	gBufferDesc.clearColor_ = { 0.0f, 0.0f, 0.0f, 0.0f };
+	pGBufferRenderTarget_ = Renderer::GetFactory()->CreateRenderTarget(gBufferDesc);
+	if (nullptr == pGBufferRenderTarget_)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool Camera::InitFianlRenderTarget()
+{
+	RenderTargetDesc finalRenderTargetDesc(E_RENDER_TECHNIQUE_TYPE::Forward);
+	finalRenderTargetDesc.size_ = { DEFAULT_SCREEN_WIDTH , DEFAULT_SCREEN_HEIGHT };
+	finalRenderTargetDesc.clearColor_ = { 0.0f, 0.0f, 0.0f, 0.0f };
+	finalRenderTargetDesc.forwardDesc_.useDepthStencil_ = false;						// 라이트 패스에서 여러 라이트를 처리하기 위해서는 Depth는 꺼야함.
+	pFinalRenderTarget_ = Renderer::GetFactory()->CreateRenderTarget(finalRenderTargetDesc);
+	if (nullptr == pFinalRenderTarget_)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+void Camera::CameraTransformUpdate()
+{
+	const Transform& worldForm = GetWorldTransform();
+	Vector eyePos = worldForm.GetPosition();
+	Vector eyeDir = worldForm.ForwardVector();
+	Vector eyeUp = worldForm.UpVector();
+
+	MATH::MatrixLookToLH(view_, eyePos, eyeDir, eyeUp);
+
+	const Float2& size = GetRenderSize();
+	MATH::MatrixPerspectiveFovLH(projection_, fov_, (size.X / size.Y), near_, far_);
+}
+
+void Camera::CleanUp()
+{
+	if (nullptr != pFinalRenderTarget_)
+	{
+		pFinalRenderTarget_->Release();
+		pFinalRenderTarget_ = nullptr;
+	}
+
+	if (nullptr != pGBufferRenderTarget_)
+	{
+		pGBufferRenderTarget_->Release();
+		pGBufferRenderTarget_ = nullptr;
+	}
+}
+
+const Float4x4& __stdcall Camera::GetViewMatrix() const
+{
+	return view_;
+}
+
+const Float4x4& __stdcall Camera::GetProjectionMatrix() const
+{
+	return projection_;
+}
+
+IRenderTarget* __stdcall Camera::GetGBufferRenderTargetForEditor() const
+{
+	return pGBufferRenderTarget_;
+}
+
+ENGINE_API IRenderTarget* __stdcall Camera::GetFinalRenderTargetForEditor() const
+{
+	return pFinalRenderTarget_;
+}
+

@@ -1,0 +1,129 @@
+#include "stdafx.h"
+#include "ParticleComponent.h"
+
+ParticleComponent::ParticleComponent()
+	: particleNum_(2000)
+	, accTime_(0.0)
+	, particleType_(0)
+	, startSize_(0.5f)
+	, endSize_(0.1f)
+	, startColor_({ 1.0f, 0.1f, 0.1f, 1.0f })
+	, endColor_({ 1.0f, 0.1f, 0.1f, 0.0f })
+	, pPSO_(nullptr)
+	, pParticle_(nullptr)
+{
+	std::vector<Particle> particleVertices(2000);
+	for (Particle& particle : particleVertices)
+	{
+		particle.position = { 0.0f,0.0f, 0.0f };
+		particle.velocity = { 0.0f,0.0f, 0.0f };
+		particle.lifeTime = 1.0f;
+		particle.age = 1.0f;
+	}
+
+	MeshDesc particleDesc;
+	particleDesc.primitiveType = E_MESH_PRIMITIVE_TYPE::POINT;
+	particleDesc.vertexType = E_VERTEX_TYPE::NONE;
+	particleDesc.usage = E_MESH_USAGE::DEFAULT;
+	particleDesc.bindFlag = E_MESH_BIND_FLAG::SHADER_RESOURCE | E_MESH_BIND_FLAG::UNORDERED_ACCESS;
+	particleDesc.bufferSize = sizeof(Particle) * particleVertices.size();
+	particleDesc.vertexFormatSize = sizeof(Particle);
+	particleDesc.vertexCount = particleVertices.size();
+	particleDesc.pVertices = particleVertices.data();	
+	pParticle_ = Renderer::GetFactory()->CreateMesh(particleDesc);
+
+	IMaterial* pParticleComputeMaterial = nullptr;
+	MaterialManager::Instance()->GetMaterial(&pParticleComputeMaterial, "MT_Particle_Compute", 19);
+	IMaterial* pParticlePassMaterial = nullptr;
+	MaterialManager::Instance()->GetMaterial(&pParticlePassMaterial, "MT_ParticlePass", 15);
+
+	PipelineStateDesc psoDesc;
+	psoDesc.meshSlotCount = 1;
+	psoDesc.materialSlotCount = 2;
+	psoDesc.depthState = E_DEPTH_PRESET::DEPTH_ENABLE_READ_ONLY;
+	psoDesc.rasterizerMode = E_RASTERIZER_PRESET::SOLID;
+	pPSO_ = Renderer::GetFactory()->CreatePipelineStateObject(psoDesc);
+	pPSO_->SetMeshToSlot(0, pParticle_);
+	pPSO_->SetMaterialToSlot(0, pParticleComputeMaterial);
+	pPSO_->SetMaterialToSlot(1, pParticlePassMaterial);
+}
+
+ParticleComponent::~ParticleComponent()
+{
+	CleanUp();
+}
+
+void ParticleComponent::BeginPlay()
+{
+}
+
+void ParticleComponent::Tick(double deltaTime)
+{
+	accTime_ += deltaTime;
+	ComputeParticleData data;
+	data.deltaTime = deltaTime;
+	data.particleNum = particleNum_;
+	data.accTime = accTime_;
+	data.particleType = particleType_;
+	Renderer::Instance()->UpdateComputeParticleFrame(data);
+
+	UINT groupCountX = (particleNum_ + 255) / 256;
+	Renderer::Instance()->Compute(pPSO_, groupCountX, 1, 1);
+}
+
+void ParticleComponent::Render()
+{
+}
+
+void ParticleComponent::RenderParticle()
+{
+	const Transform& worldForm = CameraManager::GetCurrentCamera()->GetWorldTransform();
+	Vector eye = worldForm.GetPosition();
+	Vector to = worldForm.ForwardVector();
+	Vector right = worldForm.RightVector();
+	Vector up = worldForm.UpVector();
+
+	const Float2& size = CameraManager::GetCurrentCamera()->GetRenderSize();
+	Float4x4 proj;
+	MATH::MatrixPerspectiveFovLH
+	(
+		proj, 
+		CameraManager::GetCurrentCamera()->GetFov(), 
+		(size.X / size.Y), 
+		CameraManager::GetCurrentCamera()->GetNear(), 
+		CameraManager::GetCurrentCamera()->GetFar()
+	);
+	Float4x4 view;
+	MATH::MatrixLookToLH(view, eye, to, up);
+	Float4x4 viewProj;
+	MATH::MatrixMultiply(viewProj, view, proj);
+	Float3 cameraRight(right.X, right.Y, right.Z);
+	Float3 cameraUp(up.X, up.Y, up.Z);
+
+	RenderParticleData renderData;
+	renderData.world = GetOwner()->GetWorldTransform().GetMatrix();;
+	renderData.viewProj = viewProj;
+	renderData.cameraRight = cameraRight;
+	renderData.cameraUp = cameraUp;
+	renderData.startSize = startSize_;
+	renderData.endSize = endSize_;
+	renderData.startColor = startColor_;
+	renderData.endColor = endColor_;
+	Renderer::Instance()->UpdateRenderParticleFrame(renderData);
+	Renderer::Instance()->RenderParticle_Test(pPSO_);
+}
+
+void ParticleComponent::CleanUp()
+{
+	if (nullptr != pPSO_)
+	{
+		pPSO_->Release();
+		pPSO_ = nullptr;
+	}
+
+	if (nullptr != pParticle_)
+	{
+		pParticle_->Release();
+		pParticle_ = nullptr;
+	}
+}

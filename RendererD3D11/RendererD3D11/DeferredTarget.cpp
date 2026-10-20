@@ -1,0 +1,279 @@
+#include "stdafx.h"
+#include "Texture.h"
+#include "DeferredTarget.h"
+
+DeferredTarget::DeferredTarget()
+	: refCount_(1)
+	, viewport_()
+	, clearColor_({ 0.0f, 0.8f, 0.0f, 0.0f })
+	, desc_()
+	, pRenderTextureAlbedo_(nullptr)
+	, pRenderTextureNormal_(nullptr)
+	, pRenderTextureSpecular_(nullptr)
+	, pRenderTexturePosition_(nullptr)
+	, pRenderTextureDepth_(nullptr)
+	, pDSV_(nullptr)
+{
+	std::fill(pRTVs_, pRTVs_ + RENDER_BUFFER_COUNT, nullptr);
+}
+
+DeferredTarget::~DeferredTarget()
+{
+	CleanUp();
+}
+
+bool DeferredTarget::Init
+(
+	const RenderTargetDesc& desc,
+	Texture* pRenderTextureAlbedo, 
+	Texture* pRenderTextureNormal, 
+	Texture* pRenderTextureSpecular,
+	Texture* pRenderTexturePosition,
+	Texture* pDepthTexture)
+{
+	SetClearColor(desc.clearColor_);
+	desc_ = desc.deferredDesc_;
+
+	bool ret = SetTexture(pRenderTextureAlbedo, pRenderTextureNormal, pRenderTextureSpecular, pRenderTexturePosition, pDepthTexture);
+	if (false == ret)
+	{
+		Assert("SetTexture() == false");
+		return false;
+	}
+
+	pRTVs_[0] = pRenderTextureAlbedo_->RenderTargetView();
+	pRTVs_[1] = pRenderTextureNormal_->RenderTargetView();
+	pRTVs_[2] = pRenderTextureSpecular_->RenderTargetView();
+	pRTVs_[3] = pRenderTexturePosition_->RenderTargetView();
+
+	for (int i = 0; i < RENDER_BUFFER_COUNT; ++i)
+	{
+		if (nullptr == pRTVs_[i])
+		{
+			Assert("RenderTargetView is NULL");
+			return false;
+		}
+	}
+
+	pDSV_ = pRenderTextureDepth_->DepthStencilView();
+	if (nullptr == pDSV_)
+	{
+		Assert("DepthStencilView is NULL");
+		return false;
+	}
+
+	return true;
+}
+
+HRESULT __stdcall DeferredTarget::QueryInterface(REFIID riid, void** ppvObject)
+{
+	return E_NOTIMPL;
+}
+
+ULONG __stdcall DeferredTarget::AddRef()
+{
+	return ++refCount_;
+}
+
+ULONG __stdcall DeferredTarget::Release()
+{
+	--refCount_;
+	ULONG tmpRefCount = refCount_;
+	if (0 == refCount_) {
+		delete this;
+	}
+
+	return tmpRefCount;
+}
+
+void __stdcall DeferredTarget::Bind()
+{
+	if (GCurrentSetRenderTarget == this)
+	{
+		return;
+	}
+	GCurrentSetRenderTarget = this;
+	GRenderer->DeviceContext()->OMSetRenderTargets(RENDER_BUFFER_COUNT, pRTVs_, pDSV_);
+	GRenderer->DeviceContext()->RSSetViewports(1, &viewport_);
+}
+
+void __stdcall DeferredTarget::Bind(ITexture* pDepthTexture)
+{
+	// 아직 DeferredTarget에는 외부 DepthStencilView를 사용하는 경우는 없기 때문에 임시로 비워둠.
+}
+
+void __stdcall DeferredTarget::UnBind()
+{
+	ID3D11RenderTargetView* nullRTV[RENDER_BUFFER_COUNT] = { nullptr, nullptr, nullptr, nullptr };
+	GRenderer->DeviceContext()->OMSetRenderTargets(RENDER_BUFFER_COUNT, nullRTV, nullptr);
+}
+
+void __stdcall DeferredTarget::Clear()
+{
+	ClearRenderTexture(pRenderTextureAlbedo_);
+	ClearRenderTexture(pRenderTextureNormal_);
+	ClearRenderTexture(pRenderTextureSpecular_);
+	ClearRenderTexture(pRenderTexturePosition_);
+	ClearDepthTexture(pRenderTextureDepth_);
+}
+
+
+
+RenderTargetDesc __stdcall DeferredTarget::GetDesc() const
+{
+	RenderTargetDesc desc{ E_RENDER_TECHNIQUE_TYPE::Deferred };
+	desc.clearColor_ = clearColor_;
+	desc.deferredDesc_ = desc_;
+	desc.size_ = pRenderTextureAlbedo_->Size();
+
+	return desc;
+}
+
+Float2 __stdcall DeferredTarget::GetSize() const
+{
+	return pRenderTextureAlbedo_->Size();
+}
+
+void __stdcall DeferredTarget::SetClearColor(const Color& color)
+{
+	clearColor_ = color;
+}
+
+void* __stdcall DeferredTarget::GetShaderResourceView(const E_RENDER_TEXTURE_TYPE& texureType)
+{
+	switch (texureType)
+	{
+	case E_RENDER_TEXTURE_TYPE::Albedo:
+		return pRenderTextureAlbedo_->ShaderResourceView();
+		break;
+	case E_RENDER_TEXTURE_TYPE::Normal:
+		return pRenderTextureNormal_->ShaderResourceView();
+		break;
+	case E_RENDER_TEXTURE_TYPE::Specular:
+		return pRenderTextureSpecular_->ShaderResourceView();
+		break;
+	case E_RENDER_TEXTURE_TYPE::Position:
+		return pRenderTexturePosition_->ShaderResourceView();
+		break;
+	case E_RENDER_TEXTURE_TYPE::Depth:
+		return pRenderTextureDepth_->ShaderResourceView();
+		break;
+	default:
+		break;
+	}
+	DEBUG_BREAK();
+	return nullptr;
+}
+
+ITexture* __stdcall DeferredTarget::GetRenderTexture(const E_RENDER_TEXTURE_TYPE& textureType)
+{
+	switch (textureType)
+	{
+	case E_RENDER_TEXTURE_TYPE::Albedo:
+		return pRenderTextureAlbedo_;
+		break;
+	case E_RENDER_TEXTURE_TYPE::Normal:
+		return pRenderTextureNormal_;
+		break;
+	case E_RENDER_TEXTURE_TYPE::Specular:
+		return pRenderTextureSpecular_;
+		break;
+	case E_RENDER_TEXTURE_TYPE::Position:
+		return pRenderTexturePosition_;
+		break;
+	case E_RENDER_TEXTURE_TYPE::Depth:
+		return pRenderTextureDepth_;
+		break;
+	default:
+		break;
+	}
+
+	DEBUG_BREAK();
+	return nullptr;
+}
+
+bool DeferredTarget::SetTexture(Texture* pRenderTextureAlbedo, Texture* pRenderTextureNormal, Texture* pRenderTextureSpecular, Texture* pRenderTexturePosition,  Texture* pDepthTexture)
+{
+	CleanUp();
+
+	if (nullptr == pRenderTextureAlbedo || nullptr == pRenderTextureNormal || nullptr == pRenderTextureSpecular || nullptr == pRenderTexturePosition || nullptr == pDepthTexture)
+	{
+		Assert("SetTexture() = False");
+		return false;
+	}
+
+	pRenderTextureAlbedo_ = pRenderTextureAlbedo;
+	pRenderTextureNormal_ = pRenderTextureNormal;
+	pRenderTextureSpecular_ = pRenderTextureSpecular;
+	pRenderTexturePosition_ = pRenderTexturePosition;
+	pRenderTextureDepth_ = pDepthTexture;
+
+	Float2 textureSize = pRenderTextureAlbedo_->Size();
+	viewport_.TopLeftX = 0.0f;
+	viewport_.TopLeftY = 0.0f;
+	viewport_.Width = textureSize.X;
+	viewport_.Height = textureSize.Y;
+	viewport_.MinDepth = 0.0f;
+	viewport_.MaxDepth = 1.0f;
+
+	if (nullptr != pDepthTexture)
+	{
+		pRenderTextureDepth_ = pDepthTexture;
+	}
+
+	return true;
+}
+
+void DeferredTarget::ClearRenderTexture(Texture* pRenderTexture)
+{
+	ID3D11RenderTargetView* pRenderTargetView = pRenderTexture->RenderTargetView();
+	if (nullptr == pRenderTargetView)
+	{
+		Assert("ClearRenderTexture() FAIL");
+		return;
+	}
+
+	GRenderer->DeviceContext()->ClearRenderTargetView(pRenderTargetView, clearColor_.Arr1D);
+}
+
+void DeferredTarget::ClearDepthTexture(Texture* pDepthTexture)
+{
+	ID3D11DepthStencilView* pDepthStencilView = pDepthTexture->DepthStencilView();
+	if (nullptr == pDepthStencilView)
+	{
+		Assert("ClearDepthTexture() FAIL");
+		return;
+	}
+
+	GRenderer->DeviceContext()->ClearDepthStencilView(pDepthStencilView, D3D11_CLEAR_FLAG::D3D11_CLEAR_DEPTH | D3D11_CLEAR_FLAG::D3D11_CLEAR_STENCIL, 1.0f, 0);
+}
+
+
+void DeferredTarget::CleanUp()
+{
+	if (nullptr != pRenderTextureAlbedo_)
+	{
+		pRenderTextureAlbedo_->Release();
+		pRenderTextureAlbedo_ = nullptr;
+	}
+	if (nullptr != pRenderTextureNormal_)
+	{
+		pRenderTextureNormal_->Release();
+		pRenderTextureNormal_ = nullptr;
+	}
+	if (nullptr != pRenderTextureSpecular_)
+	{
+		pRenderTextureSpecular_->Release();
+		pRenderTextureSpecular_ = nullptr;
+	}
+	if (nullptr != pRenderTexturePosition_)
+	{
+		pRenderTexturePosition_->Release();
+		pRenderTexturePosition_ = nullptr;
+	}
+	if (nullptr != pRenderTextureDepth_)
+	{
+		pRenderTextureDepth_->Release();
+		pRenderTextureDepth_ = nullptr;
+	}
+}
