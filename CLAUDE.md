@@ -85,7 +85,14 @@ Plan.md             로드맵 + 할 일 체크리스트
 1. **스레드 경계**: 엔진 객체(Actor, Level)는 엔진 메인 스레드에서만 수정한다. Room 상태는 Room JobQueue 안에서만 수정한다.
 2. 작게 만들고, 바로 테스트하고, 커밋한다. 커밋과 push는 사용자가 요청할 때만 한다.
    - 커밋 메시지와 PR에 **Claude가 작성했다는 표시(`Co-Authored-By: Claude`, "Generated with Claude Code" 등)를 넣지 않는다.**
-   - 메시지 형식: 영어 Conventional Commits (`feat(ServerCore): ...`, `docs: ...`, `chore: ...`)
+   - 메시지 형식: 영어 Conventional Commits (`feat(ServerCore): ...`, `docs: ...`, `chore: ...`). 세부 단계는 메시지에 표시한다 (예: `(Phase 1-1 Step 2)`).
+   - **브랜치는 Plan.md의 Phase 단위**로 하나씩 만든다: `<종류>/phase<번호>-<짧은 설명>`
+     - 종류: `feature/`(기능), `refactor/`(구조 변경), `fix/`(버그), `docs/`(문서)
+     - 예: `feature/phase1-servercore`, `feature/phase2-packet`, `feature/phase3-gameserver`, `refactor/phase4-client`, `feature/phase5-network`, `feature/phase6-movement-sync`, `feature/phase7-stress-test`
+     - Phase 8은 주제별로 나눈다 (`feature/phase8-aoi`, `feature/phase8-udp` ...). Phase와 무관한 버그 수정은 `fix/<내용>`으로 만들고 바로 머지한다.
+     - Phase가 길면 큰 구간이 끝날 때 중간에 main에 머지해도 된다 (예: Phase 1-4 Echo 서버 동작 시점).
+     - 작업을 마칠 때마다 작업 브랜치를 push한다 (다른 PC에서 이어가기 + 백업).
+     - main에 머지한 브랜치는 로컬과 원격에서 모두 삭제한다 (`git branch -d`, `git push origin --delete`).
 3. `MMOServer_example/`은 커밋하지 않는다.
 4. **PC별 수동 준비물** (git 제외 → 새 PC에서 clone 후 직접 복사):
    - `MMOServer_example/` (강의 코드)
