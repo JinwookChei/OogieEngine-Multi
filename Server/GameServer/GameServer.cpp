@@ -4,33 +4,34 @@
 
 int main(int argc, char* argv[])
 {
+	CoreGlobal coreGlobal;
 	cout << "GameServer Start" << endl;
 
 	/*
 		[Step 1] 크기 매크로 / STOMP
 	*/
-	int32 arr[10];
-	cout << "size32(arr) = " << size32(arr) << endl;   // 40
-	cout << "len32(arr)  = " << len32(arr) << endl;    // 10
-
-#ifdef _STOMP
-	cout << "STOMP : ON" << endl;
-#else
-	cout << "STOMP : OFF" << endl;
-#endif
+//	int32 arr[10];
+//	cout << "size32(arr) = " << size32(arr) << endl;   // 40
+//	cout << "len32(arr)  = " << len32(arr) << endl;    // 10
+//
+//#ifdef _STOMP
+//	cout << "STOMP : ON" << endl;
+//#else
+//	cout << "STOMP : OFF" << endl;
+//#endif
 
 	/*
 		[Step 2] ASSERT_CRASH
 	*/
 	// 1) 조건이 참이면 아무 일도 없다
-	ASSERT_CRASH(1 + 1 == 2);
-	cout << "ASSERT_CRASH(true) passed" << endl;
+	//ASSERT_CRASH(1 + 1 == 2);
+	//cout << "ASSERT_CRASH(true) passed" << endl;
 
-	// 2) if/else 안에서도 컴파일되는지 (do-while(0) 확인)
-	if (argc > 100)
-		ASSERT_CRASH(false);
-	else
-		cout << "if/else compile OK" << endl;
+	//// 2) if/else 안에서도 컴파일되는지 (do-while(0) 확인)
+	//if (argc > 100)
+	//	ASSERT_CRASH(false);
+	//else
+	//	cout << "if/else compile OK" << endl;
 
 	// 3) 실제로 크래시가 나는지: 주석을 풀고 F5로 실행 → 확인 후 다시 주석 처리
 	// int32 hp = -1;
@@ -40,34 +41,54 @@ int main(int argc, char* argv[])
 	/*
 		[Step 3] TLS
 	*/
-	LThreadId = 100;
-	std::thread t([]()
-		{
-			cout << "[worker] before : " << LThreadId << endl;      // 0 (메인의 100이 보이지 않음)
-			LThreadId = 200;
-			cout << "[worker] after  : " << LThreadId << endl;      // 200
-		});
-	t.join();
-	cout << "[main]   LThreadId : " << LThreadId << endl;   // 100 
+	//LThreadId = 100;
+	//std::thread t([]()
+	//	{
+	//		cout << "[worker] before : " << LThreadId << endl;      // 0 (메인의 100이 보이지 않음)
+	//		LThreadId = 200;
+	//		cout << "[worker] after  : " << LThreadId << endl;      // 200
+	//	});
+	//t.join();
+	//cout << "[main]   LThreadId : " << LThreadId << endl;   // 100 
 
 
 	/*
 		[Step 4] ThreadManager
 	*/
+	//{
+	//	ThreadManager tm;
+	//	cout << "[main] LThreadId : " << LThreadId << endl;
+	//	Mutex coutLock;
+
+	//	for (int32 i = 0; i < 5; ++i)
+	//	{
+	//		tm.Launch([&coutLock]()
+	//			{
+	//				LockGuard guard(coutLock);
+	//				cout << "[worker] LThreadId : " << LThreadId << endl;
+	//			});
+	//	}
+	//	tm.Join();
+
+	//	cout << "All threads joined" << endl;
+	//}
+
+	/*
+		[Step 5] CoreGlobal + GThreadManager
+	*/
 	{
-		ThreadManager tm;
-		cout << "[main] LThreadId : " << LThreadId << endl;
+		cout << "[main] LThreadId : " << LThreadId << endl;    // 1 (CoreGlobal → ThreadManager 생성자의 InitTLS)
 		Mutex coutLock;
 
 		for (int32 i = 0; i < 5; ++i)
 		{
-			tm.Launch([&coutLock]()
+			GThreadManager->Launch([&coutLock]()
 				{
 					LockGuard guard(coutLock);
 					cout << "[worker] LThreadId : " << LThreadId << endl;
 				});
 		}
-		tm.Join();
+		GThreadManager->Join();   // coutLock이 사라지기 전에 반드시 Join (위 정답 참고)
 
 		cout << "All threads joined" << endl;
 	}
