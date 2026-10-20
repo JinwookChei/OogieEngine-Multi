@@ -1,6 +1,5 @@
 ﻿#pragma once
-
+#include "Types.h"
+#include "CoreMacro.h"
 #include <iostream>
 using namespace std;
-
-// Phase 1에서 Types.h, CoreMacro.h, winsock2 ... 추가 예정
