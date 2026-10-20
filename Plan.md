@@ -69,11 +69,13 @@ Phase 9  포트폴리오 정리
   - `MMOServer_example/` (유료 강의 코드)
   - Protobuf lib → `Server/Libraries/Libs/Protobuf/{Debug,Release}/` (Debug lib이 100MB 이상이라 GitHub 파일 한도 초과)
   - FBX SDK 2020.3.11 (OogieEngine 빌드용, README 참고)
-- [ ] 작업 브랜치 생성 (`feature/server-core` 등)
-- [ ] `Server/Server.sln` 생성, 플랫폼은 **x64 단일**로 통일 (Win32 구성 제거)
-- [ ] 프로젝트 3개 생성: `ServerCore`(Static Library), `GameServer`(Console), `DummyClient`(Console)
-- [ ] 공통 설정: C++17, `/MP`, 경고 레벨 W4 (가능하면), 출력 경로 `$(SolutionDir)Binary\$(Configuration)\`
-- [ ] Protobuf 3.17.2 x64 Debug/Release lib 준비 (**CRT /MDd·/MD가 OogieEngine과 일치하는지 확인**)
+  - VS 개인 설정: Server.sln **여러 시작 프로젝트**(GameServer + DummyClient), Client 시작 프로젝트(Content)
+  - 👉 전체 절차: **`Setup.md`**
+- [x] 작업 브랜치 생성 (`feature/server-setup`)
+- [x] `Server/Server.sln` 생성, 플랫폼은 **x64 단일**로 통일 (Win32 구성 제거)
+- [x] 프로젝트 3개 생성: `ServerCore`(Static Library), `GameServer`(Console), `DummyClient`(Console)
+- [x] 공통 설정: C++17, `/MP`, `/utf-8`, 출력 경로 `$(SolutionDir)Binary\$(Configuration)\`, `Server/.editorconfig`(UTF-8 BOM)
+- [x] Protobuf 3.17.2 x64 Debug/Release lib 준비 (CRT `/MDd`·`/MD` 확인 완료)
 - [ ] Python + Jinja2 설치 (PacketGenerator용)
 
 **완료 기준**: 빈 GameServer가 ServerCore.lib을 링크해 x64 Debug/Release로 빌드된다.
