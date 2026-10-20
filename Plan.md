@@ -6,6 +6,28 @@
 
 ---
 
+## 📍 현재 진행 상황 (세션을 시작하면 여기부터 확인)
+
+| 항목 | 상태 |
+|---|---|
+| 작업 브랜치 | `feature/phase1-servercore` |
+| 현재 위치 | **Phase 1-1 Step 5 `CoreGlobal`** 시작 전 |
+| 완료 | Phase 0 / Phase 1-1 Step 1~4 (Types, CoreMacro, CoreTLS, ThreadManager) |
+| 남은 숙제 | Step 4 확인 질문 2개 미답변 ↓ |
+
+**Step 4 확인 질문 (미답변)**
+1. `InitTLS`에서 `Atomic` 대신 일반 `static uint32`로 `SThreadId++`를 하면 어떤 문제가 생길 수 있나?
+2. `Launch`의 람다를 `[&]`로 바꾸면 왜 위험한가? 테스트의 `[&coutLock]`은 왜 괜찮은가?
+
+**다음에 할 일**
+1. Step 4 확인 질문 답변 → Claude가 확인
+2. Step 5 `CoreGlobal`: `GThreadManager` 전역 포인터 + 생성/소멸 담당 `CoreGlobal` 전역 객체 (정적 라이브러리에서 .obj가 링크에서 빠지는 함정 주의)
+3. Step 6 `CorePch` 정리 + 스레드 테스트 (GameServer 테스트 코드 정리, `std::thread` 사용부의 간접 include 의존 정리)
+
+> 이 섹션은 Step이 끝날 때마다 갱신한다.
+
+---
+
 ## 0. 핵심 설계 결정 (권장안)
 
 | 항목 | 결정 | 이유 |
@@ -88,12 +110,15 @@ Phase 9  포트폴리오 정리
 > 아래 🔧 표시는 강의 코드의 결함을 내 코드에서 **개선**할 항목이다 (포트폴리오 차별점).
 
 ### 1-1. 기반
-- [ ] `Types.h` (int32, uint64, `USING_SHARED_PTR`, size16/len32)
-- [ ] `CoreMacro.h` (`CRASH`, `ASSERT_CRASH`, `USE_LOCK`/`READ_LOCK`/`WRITE_LOCK`)
-- [ ] `CoreTLS` (`LThreadId`, `LEndTickCount`, `LLockStack`, `LSendBufferChunk`, `LCurrentJobQueue`)
-- [ ] `CoreGlobal` (전역 매니저 생성/소멸 순서)
-- [ ] `ThreadManager` (Launch / Join / InitTLS)
-- [ ] 🔧 `_STOMP`를 `Types.h` 고정 정의 대신 **Debug 전용 전처리기 옵션**으로 분리
+- [x] Step 1 `Types.h` (고정 크기 정수 `std::int32_t` 등, 동기화 별칭, `USING_SHARED_PTR`)
+- [x] Step 1 `CoreMacro.h` 분리 (2층 검증 매크로 `STATIC_ASSERT` → `STATIC_ASSERT_SIZE`, size16/len32) + `Types.cpp`(타입 크기 검증)
+- [x] 🔧 `_STOMP`를 Debug에서만 켜도록 분리 (`CoreMacro.h`)
+- [x] Step 2 `CRASH` / `ASSERT_CRASH` (2층 구조, `do { } while (0)`, volatile, `#expr`), `OUT`
+- [x] Step 3 `CoreTLS` (`LThreadId`만. 나머지 TLS는 해당 Phase에서 추가)
+- [x] Step 4 `ThreadManager` (Launch / Join / InitTLS / DestroyTLS, 멤버 `lock_`, `threads_`)
+- [ ] Step 5 `CoreGlobal` (전역 매니저 생성/소멸 순서)
+- [ ] Step 6 `CorePch` 정리 + 스레드 테스트
+- 미룬 항목: Lock 매크로(`USE_LOCK`/`READ_LOCK`/`WRITE_LOCK`) → 1-2, `LLockStack` → 1-2, `LSendBufferChunk` → 1-5, `LEndTickCount`/`LCurrentJobQueue` → 1-6
 
 ### 1-2. 동기화
 - [ ] `Lock` (RW SpinLock: [WriteThreadId 16bit][ReadCount 16bit], 재귀 Write 허용)

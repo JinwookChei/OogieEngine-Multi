@@ -27,7 +27,7 @@ git push
 ```bash
 git clone https://github.com/JinwookChei/OogieEngine-Multi.git
 cd OogieEngine-Multi
-git switch <작업 중인 브랜치>     # 예: feature/server-setup
+git switch <작업 중인 브랜치>     # Plan.md 맨 위 "📍 현재 진행 상황"의 작업 브랜치 (예: feature/phase1-servercore)
 ```
 
 ### 2. git에 없는 파일 복사 (USB / 개인 클라우드 / 강의 사이트)
