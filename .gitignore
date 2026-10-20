@@ -1,0 +1,61 @@
+# ==========================================================
+#  OogieEngine-Multi root .gitignore
+#  - Client/ 는 Client/.gitignore (VisualStudio 템플릿)가 따로 관리
+#  - 이 파일은 저장소 전체 + Server/ 를 담당
+# ==========================================================
+
+# ---------- 강의 소스 (유료 강의 코드: 절대 커밋 금지) ----------
+MMOServer_example/
+
+# ---------- Visual Studio ----------
+.vs/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.aps
+ipch/
+UpgradeLog*.htm
+
+# ---------- 빌드 중간/결과물 ----------
+x64/
+x86/
+[Ww]in32/
+[Dd]ebug/
+[Rr]elease/
+*.obj
+*.pch
+*.pdb
+*.idb
+*.ilk
+*.iobj
+*.ipdb
+*.tlog
+*.log
+*.lastbuildstate
+
+# ---------- Server ----------
+# 실행 파일 출력 폴더
+Server/Binary/
+# ServerCore.lib 출력 + Protobuf lib (Debug lib이 100MB 이상이라 GitHub 제한 초과 → PC마다 따로 준비)
+Server/Libraries/Libs/
+
+# Protobuf / PacketGenerator 자동 생성 코드 (Pre-Build에서 다시 생성)
+*.pb.h
+*.pb.cc
+Server/GameServer/ClientPacketHandler.h
+Server/DummyClient/ServerPacketHandler.h
+
+# PacketGenerator (PyInstaller 빌드 부산물)
+Server/Tools/PacketGenerator/build/
+Server/Tools/PacketGenerator/dist/
+Server/Tools/PacketGenerator/*.spec
+__pycache__/
+*.pyc
+
+# ---------- Claude Code 로컬 설정 ----------
+.claude/settings.local.json
+
+# ---------- OS ----------
+Thumbs.db
+desktop.ini
