@@ -80,6 +80,7 @@ Plan.md             로드맵 + 할 일 체크리스트
 | 클라이언트 네트워크 | ServerCore의 `ClientService`를 재사용. IOCP 스레드 → PacketQueue → 엔진 메인 루프에서 `NetworkManager::Tick()`으로 처리 |
 | 프로토콜(초안) | `PosInfo{object_id, x, y, z, yaw, MoveState}`, `ObjectInfo`, C/S_LOGIN, C/S_ENTER_GAME, S_SPAWN, S_DESPAWN, C/S_MOVE, C/S_CHAT (자세한 내용은 Plan.md Phase 2) |
 | 인코딩 | 서버 신규 파일은 UTF-8(BOM), 클라 기존 파일은 CP949 유지 |
+| 서버 네이밍 | **멤버 변수는 뒤에 `_`** (`lock_`, `threads_`) — 강의의 앞 `_`(`_lock`) 대신 OogieEngine과 통일. 전역 `G`, TLS `L`, 함수 안 static `S` 접두사. 강의 코드를 옮길 때 예시 코드도 이 규칙으로 바꿔 제시한다 |
 
 ## 반드시 지킬 규칙
 1. **스레드 경계**: 엔진 객체(Actor, Level)는 엔진 메인 스레드에서만 수정한다. Room 상태는 Room JobQueue 안에서만 수정한다.
