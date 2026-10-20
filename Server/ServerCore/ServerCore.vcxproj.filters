@@ -16,19 +16,28 @@
     <Filter Include="PCH">
       <UniqueIdentifier>{efa1c4c3-ed15-4797-9b76-facb1f963b28}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Utility">
+      <UniqueIdentifier>{eb786c3c-1d4e-4314-93f1-af1b856efc44}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="TLS">
+      <UniqueIdentifier>{0566a8b7-136b-4de8-8627-f7af65734fb0}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
       <Filter>PCH</Filter>
     </ClInclude>
-    <ClInclude Include="Types.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
-    <ClInclude Include="CoreMacro.h">
-      <Filter>헤더 파일</Filter>
-    </ClInclude>
     <ClInclude Include="CorePch.h">
       <Filter>PCH</Filter>
+    </ClInclude>
+    <ClInclude Include="CoreMacro.h">
+      <Filter>Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="Types.h">
+      <Filter>Utility</Filter>
+    </ClInclude>
+    <ClInclude Include="CoreTLS.h">
+      <Filter>TLS</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -36,7 +45,10 @@
       <Filter>PCH</Filter>
     </ClCompile>
     <ClCompile Include="Types.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Utility</Filter>
+    </ClCompile>
+    <ClCompile Include="CoreTLS.cpp">
+      <Filter>TLS</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

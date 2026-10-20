@@ -1,4 +1,5 @@
 ﻿#include "pch.h"
+#include <thread>
 
 
 int main(int argc, char* argv[])
@@ -34,4 +35,19 @@ int main(int argc, char* argv[])
 	// 3) 실제로 크래시가 나는지: 주석을 풀고 F5로 실행 → 확인 후 다시 주석 처리
 	// int32 hp = -1;
 	// ASSERT_CRASH(hp >= 0);
+
+
+	/*
+		[Step 3] TLS
+	*/
+	LThreadId = 100;
+	std::thread t([]()
+		{
+			cout << "[worker] before : " << LThreadId << endl;      // 0 (메인의 100이 보이지 않음)
+			LThreadId = 200;
+			cout << "[worker] after  : " << LThreadId << endl;      // 200
+		});
+	t.join();
+
+	cout << "[main]   LThreadId : " << LThreadId << endl;   // 100 
 }
