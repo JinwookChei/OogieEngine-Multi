@@ -18,6 +18,41 @@
 
 
 /*
+	[런타임 검증 매크로]
+*/
+// [1층] 구현: 프로세스를 즉시 죽이는 유일한 곳. 크래시 방식을 바꾸려면 여기만 수정한다.
+//   - cause를 volatile 지역 변수에 담아 두면, 디버거/크래시 덤프에서 원인 문자열을 볼 수 있다.
+//   - volatile 포인터로 써야 컴파일러가 "의미 없는 코드"로 보고 최적화로 지우지 않는다.
+//   - __analysis_assume: 정적 분석기(/analyze)의 "널 포인터 역참조" 경고를 끈다. (실행에는 영향 없음)
+//   ※ 매크로의 줄 끝 '\' 뒤에는 공백이 있으면 안 된다. (있으면 매크로가 그 줄에서 끝나 버림)
+#define CRASH(cause)										\
+	do {													\
+		const char* volatile crashCause = (cause);			\
+		(void)crashCause;									\
+		volatile uint32* crash = nullptr;					\
+		__analysis_assume(crash != nullptr);				\
+		*crash = 0xDEADBEEF;								\
+	} while (0)
+
+
+// [2층] 용도별 매크로: 반드시 CRASH를 거친다.
+//   - #expr: 실패한 조건식 자체를 문자열로 남긴다. 예) "count > 0"
+//   - __analysis_assume(expr): 이 줄 이후로 expr이 참이라고 분석기에 알려준다.
+#define ASSERT_CRASH(expr)									\
+	do {													\
+		if (!(expr))										\
+		{													\
+			CRASH("ASSERT_CRASH: " #expr);					\
+			__analysis_assume(expr);						\
+		}													\
+	} while (0)
+
+
+// 출력 매개변수 표시용 (아무 일도 하지 않음). 예) bool Pop(OUT Job& job);
+#define OUT
+
+
+/*
 	[크기 매크로]
 */
 // sizeof는 size_t(x64에서 8바이트)를 반환 → 패킷 크기 필드(uint16)에 넣을 때 캐스팅 필요
