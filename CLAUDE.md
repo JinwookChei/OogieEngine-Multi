@@ -7,6 +7,7 @@
 - 참고 자료: 인프런 Rookiss *[C++과 언리얼로 만드는 MMORPG 게임 개발 시리즈] Part4: 게임 서버* 강의 소스(`MMOServer_example/`).
   - ⚠️ 유료 강의 코드이므로 **절대 커밋하지 않는다** (`.gitignore` 대상). 각 PC에 별도로 복사해 둔다.
 - 진행 순서와 상황은 **`Plan.md`** 에서 관리한다 (Phase 0~9, 체크박스). 세션을 시작하면 Plan.md에서 현재 위치부터 확인한다.
+- **새 PC에서 처음 시작하는 세션**이거나 빌드가 환경 문제로 실패하면 **`Setup.md`**(git에 없는 파일, VS 로컬 설정 체크리스트)를 먼저 사용자에게 안내한다.
 
 ## 저장소 구조
 ```
@@ -77,4 +78,6 @@ Plan.md             로드맵 + 할 일 체크리스트
    - **Protobuf lib** → `Server/Libraries/Libs/Protobuf/{Debug,Release}/` (Debug lib이 100MB 이상이라 GitHub 한도 초과. Protobuf 헤더 `Server/Libraries/Include/`와 `protoc.exe`는 커밋 대상)
    - FBX SDK 2020.3.11
    - 빌드가 lib 누락으로 실패하면 이 항목부터 확인한다.
+   - VS 개인 설정(`*.user`, `.slnLaunch.user`의 여러 시작 프로젝트 등)도 PC마다 다시 설정한다.
+   - 전체 절차는 `Setup.md`에 있다. git에 안 올라가는 항목이 새로 생기면 Setup.md에 추가한다.
 5. 여러 PC에서 작업하므로, 작업을 시작할 때 `git pull`, 마칠 때 `push`를 안내한다. 새로 정해진 설계 결정은 이 파일에, 진행 상황은 Plan.md에 반영한다.
