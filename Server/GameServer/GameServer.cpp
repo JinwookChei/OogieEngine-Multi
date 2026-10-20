@@ -1,5 +1,5 @@
 ﻿#include "pch.h"
-#include <thread>
+#include "ThreadManager.h"
 
 
 int main(int argc, char* argv[])
@@ -48,6 +48,27 @@ int main(int argc, char* argv[])
 			cout << "[worker] after  : " << LThreadId << endl;      // 200
 		});
 	t.join();
-
 	cout << "[main]   LThreadId : " << LThreadId << endl;   // 100 
+
+
+	/*
+		[Step 4] ThreadManager
+	*/
+	{
+		ThreadManager tm;
+		cout << "[main] LThreadId : " << LThreadId << endl;
+		Mutex coutLock;
+
+		for (int32 i = 0; i < 5; ++i)
+		{
+			tm.Launch([&coutLock]()
+				{
+					LockGuard guard(coutLock);
+					cout << "[worker] LThreadId : " << LThreadId << endl;
+				});
+		}
+		tm.Join();
+
+		cout << "All threads joined" << endl;
+	}
 }

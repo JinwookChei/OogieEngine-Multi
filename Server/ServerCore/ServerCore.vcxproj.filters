@@ -22,6 +22,9 @@
     <Filter Include="TLS">
       <UniqueIdentifier>{0566a8b7-136b-4de8-8627-f7af65734fb0}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Thread">
+      <UniqueIdentifier>{fe60dfd3-d62f-4fa3-be42-eef0f8f369b9}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -39,6 +42,9 @@
     <ClInclude Include="CoreTLS.h">
       <Filter>TLS</Filter>
     </ClInclude>
+    <ClInclude Include="ThreadManager.h">
+      <Filter>Thread</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -49,6 +55,9 @@
     </ClCompile>
     <ClCompile Include="CoreTLS.cpp">
       <Filter>TLS</Filter>
+    </ClCompile>
+    <ClCompile Include="ThreadManager.cpp">
+      <Filter>Thread</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>
