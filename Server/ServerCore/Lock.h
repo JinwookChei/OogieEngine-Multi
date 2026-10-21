@@ -2,7 +2,6 @@
 #include <typeinfo>
 #include "Types.h"
 
-
 /*
 ┌────────────────────────┬────────────────────────┬──────────────────────────────────┐
 │       지금 상태         │     ReadLock 요청      │          WriteLock 요청          │
@@ -44,7 +43,6 @@ private:
 	Atomic<uint32> lockFlag_{ EMPTY_FLAG };
 	uint16 writeCount_ = 0;
 };
-
 
 
 

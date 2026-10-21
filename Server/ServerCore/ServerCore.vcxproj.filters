@@ -57,6 +57,9 @@
     <ClInclude Include="CoreGlobal.h">
       <Filter>Core</Filter>
     </ClInclude>
+    <ClInclude Include="DeadLockProfiler.h">
+      <Filter>Lock</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="pch.cpp">
@@ -76,6 +79,9 @@
     </ClCompile>
     <ClCompile Include="CoreGlobal.cpp">
       <Filter>Core</Filter>
+    </ClCompile>
+    <ClCompile Include="DeadLockProfiler.cpp">
+      <Filter>Lock</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

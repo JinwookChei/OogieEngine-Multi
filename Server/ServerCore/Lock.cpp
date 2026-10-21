@@ -1,11 +1,18 @@
 ﻿#include "pch.h"
 #include <chrono>
 #include <thread>
+#include "CoreGlobal.h"
 #include "CoreTLS.h"
 #include "Lock.h"
+#include "DeadLockProfiler.h"
+
 
 void Lock::WriteLock(const char* name)
 {
+#ifdef _DEBUG
+	GDeadLockProfiler->PushLock(name);
+#endif // DEBUG
+
 	// 0은 EMPTY_FLAG의 소유자 값과 같다 → InitTLS 안 된 스레드가 재진입으로 오인해 락을 그냥 통과한다
 	ASSERT_CRASH(LThreadId != 0 && LThreadId <= 0xFFFF);
 
@@ -45,6 +52,10 @@ void Lock::WriteLock(const char* name)
 
 void Lock::WriteUnlock(const char* name)
 {
+#ifdef _DEBUG
+	GDeadLockProfiler->PopLock(name);
+#endif // DEBUG
+
 	// 내가 잡은 락만 풀 수 있다
 	const uint32 lockThreadId = (lockFlag_.load() & WRITE_THREAD_MASK) >> 16;
 	ASSERT_CRASH(lockThreadId == LThreadId);
@@ -102,6 +113,10 @@ void Lock::WriteUnlock(const char* name)
 */
 void Lock::ReadLock(const char* name)
 {
+#ifdef _DEBUG
+	GDeadLockProfiler->PushLock(name);
+#endif // DEBUG
+
 	ASSERT_CRASH(LThreadId != 0 && LThreadId <= 0xFFFF);
 
 	// 1) 내가 Write 락을 갖고 있으면 다른 스레드는 들어올 수 없다 → 경쟁 없이 Read 카운트만 올린다
@@ -133,6 +148,10 @@ void Lock::ReadLock(const char* name)
 
 void Lock::ReadUnlock(const char* name)
 {
+#ifdef _DEBUG
+	GDeadLockProfiler->PopLock(name);
+#endif // DEBUG
+
 	// fetch_sub은 빼기 전 값을 돌려준다 → 이미 0이었다면 Lock보다 Unlock을 더 많이 호출한 것
 	if ((lockFlag_.fetch_sub(1) & READ_COUNT_MASK) == 0)
 		CRASH("MULTIPLE_UNLOCK");
