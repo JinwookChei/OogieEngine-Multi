@@ -11,24 +11,25 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-2 Step 3 `ReadLockGuard`/`WriteLockGuard` + `USE_LOCK` 매크로** 코드 완료, 테스트 남음 |
-| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 Step 1~3 코드 (Lock Write/Read, LockGuard, 매크로) |
-| 남은 숙제 | Lock 테스트 없음(매크로는 아직 한 번도 펼쳐진 적 없음), 확인 질문 미답변 ↓ |
+| 현재 위치 | **Phase 1-2 Step 5 `DeadLockProfiler::CheckCycle` (DFS 사이클 검출)** 안내 완료, 사용자 작성 중 |
+| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 Step 1~4 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop) |
+| 남은 숙제 | Step 4 코드 커밋 안 함, 크래시 테스트 3개 사용자 확인 필요, 확인 질문 미답변 ↓ |
 
 **확인 질문 (미답변)**
 - Phase 1-1 Step 6: ① 카운터 1개 증가에 Atomic과 Mutex 중 무엇이 적합한가 ② Release에서 보호 없는 카운터가 우연히 기댓값과 같게 나오는 이유와 그 의미
 - Phase 1-2 Step 1: ① 락 획득에 load → store 대신 CAS가 필요한 이유 ② 재진입 검사(load 후 비교)가 안전한 이유
 - Phase 1-2 Step 3: ① 이름 없는 가드 `WriteLockGuard(locks_[0], "Room");`는 어떻게 되나 ② `READ_LOCK` 중 `Push()`(WRITE_LOCK) 호출 시 결과
+- Phase 1-2 Step 4: ① 같은 클래스의 서로 다른 객체 2개를 차례로 잡으면 Profiler는 어떻게 인식하나 (한계) ② PushLock을 실제 Lock 획득 전에 호출하는 이유
 
-**Lock 테스트 남은 일 (Step 4 전에 권장)**
-- `WriteLockCounter()`는 Write 재진입만 확인한다 (출력 없음, Lock/Unlock name 불일치 → Step 4 DeadLockProfiler에서 크래시 예정)
-- 매크로 경합 테스트: `USE_LOCK` + `std::vector<int32>` 클래스, `Push`(WRITE_LOCK) / `Sum`(READ_LOCK), Writer 1 + Reader 3, 원소 개수 == N 검증
-- 선택: Write → Read 재진입, Read → Write 타임아웃, `std::thread`로 만든 스레드(LThreadId 0)의 ASSERT_CRASH
-- 사소함: `Lock.h` 빈 줄 3개 연속 2곳, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음, 문장 깨짐), `GameServer.cpp`의 불필요한 `ThreadManager.h` include, `constexpr int32`
+**테스트 현황** (`GameServer/Test.cpp`, Step 4에서 사용자 요청으로 Claude가 작성)
+- 정상: `LockReentrancy`, `LockContention` → Debug/Release 모두 통과
+- 크래시 (F5로 하나씩): `CrashInvalidUnlockOrder`, `CrashUnknownLock`, `CrashThreadIdZero` → 사용자 확인 필요. Release에서는 Profiler 2개가 FAIL 출력이 정상
+- 사소함: `#endif // DEBUG` → `// _DEBUG`, `CoreTLS.h` 주석 스페이스 들여쓰기, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음)
 
 **다음에 할 일**
-1. Lock 매크로 경합 테스트 (위)
-2. Phase 1-2 Step 4 DeadLockProfiler → Step 5 경합 테스트
+1. Phase 1-2 Step 5 CheckCycle 작성 → 리뷰
+2. Step 6 역순 락 검출 테스트 (A→B 후 B→A → DEADLOCK_DETECTED)
+3. Phase 1-2 완료 → Phase 1-3 메모리
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각.
 
@@ -131,11 +132,12 @@ Phase 9  포트폴리오 정리
 - 미룬 항목: Lock 매크로(`USE_LOCK`/`READ_LOCK`/`WRITE_LOCK`) → 1-2, `LLockStack` → 1-2, `LSendBufferChunk` → 1-5, `LEndTickCount`/`LCurrentJobQueue` → 1-6
 
 ### 1-2. 동기화
-- [x] Step 1 `Lock` WriteLock/WriteUnlock (테스트 보완 남음) (CAS, 재귀 Write, 타임아웃) — 🔧 `LThreadId == 0` 검증, Unlock 소유자 검증, `steady_clock`
-- [x] Step 2 `Lock` ReadLock/ReadUnlock (RW SpinLock: [WriteThreadId 16bit][ReadCount 16bit]) (테스트 남음)
-- [x] Step 3 `ReadLockGuard` / `WriteLockGuard` + `USE_LOCK`/`READ_LOCK`/`WRITE_LOCK` 매크로 (Lock.h에 둠), CorePch에 Lock.h 추가 (테스트 남음)
-- [ ] `DeadLockProfiler` (Debug 전용, 락 순서 그래프 DFS로 사이클 검출)
-- [ ] 테스트: 스레드 여러 개로 공유 컨테이너 Read/Write 경합 → 크래시 없음
+- [x] Step 1 `Lock` WriteLock/WriteUnlock (CAS, 재귀 Write, 타임아웃) — 🔧 `LThreadId == 0` 검증, Unlock 소유자 검증, `steady_clock`
+- [x] Step 2 `Lock` ReadLock/ReadUnlock (RW SpinLock: [WriteThreadId 16bit][ReadCount 16bit])
+- [x] Step 3 `ReadLockGuard` / `WriteLockGuard` + `USE_LOCK`/`READ_LOCK`/`WRITE_LOCK` 매크로 (Lock.h에 둠), CorePch에 Lock.h 추가
+- [x] Step 4 `DeadLockProfiler` Push/Pop (`LLockStack` TLS, 이름 → ID, 순서 간선 기록, Unlock 순서 검증, `GDeadLockProfiler`) — 🔧 `std::string` 키, Pop에서 없는 이름 등록 방지
+- [ ] Step 5 `DeadLockProfiler::CheckCycle` (Debug 전용, 3색 DFS로 역방향 간선 = 사이클 검출, 사이클 경로 출력)
+- [ ] Step 6 테스트: 스레드 여러 개로 공유 컨테이너 Read/Write 경합 → 크래시 없음, 역순 락 → DEADLOCK_DETECTED
 
 ### 1-3. 메모리
 - [ ] `BaseAllocator` / `StompAllocator` / `PoolAllocator` / `StlAllocator`

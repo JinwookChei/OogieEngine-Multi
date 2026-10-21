@@ -6,11 +6,11 @@
 | Step | 파일 | 한 줄 요약 | 상태 |
 |---|---|---|---|
 | 사전 | — | Atomic vs Mutex, 재귀 lock 크래시 | ✅ |
-| 1 | `Lock.h/.cpp` | WriteLock / WriteUnlock (CAS, 재진입, 타임아웃) | ✅ (테스트 보완 남음) |
-| 2 | `Lock.h/.cpp` | ReadLock / ReadUnlock | ✅ (테스트 남음) |
-| 3 | `Lock.h` | ReadLockGuard / WriteLockGuard + `USE_LOCK` 매크로 | ✅ (테스트 남음) |
-| 4 | `DeadLockProfiler.h/.cpp` | 락 스택, 순서 기록, Unlock 순서 검증 | 🚧 |
-| 5 | `DeadLockProfiler.cpp` | CheckCycle (DFS 사이클 검출) | ⬜ |
+| 1 | `Lock.h/.cpp` | WriteLock / WriteUnlock (CAS, 재진입, 타임아웃) | ✅ |
+| 2 | `Lock.h/.cpp` | ReadLock / ReadUnlock | ✅ |
+| 3 | `Lock.h` | ReadLockGuard / WriteLockGuard + `USE_LOCK` 매크로 | ✅ |
+| 4 | `DeadLockProfiler.h/.cpp` | 락 스택, 순서 기록, Unlock 순서 검증 | ✅ |
+| 5 | `DeadLockProfiler.cpp` | CheckCycle (DFS 사이클 검출) | 🚧 |
 | 6 | `GameServer/Test.*` | 경합 테스트, 역순 락 검출 | ⬜ |
 
 ---
@@ -297,7 +297,112 @@ private:
 
 ---
 
-## Step 4. DeadLockProfiler — Push / Pop 🚧
+## Step 4. DeadLockProfiler — Push / Pop
 
-> 작성 중. Step 완료 후 정리 예정.
-> 핵심 키워드: 락 순서 그래프(A를 잡은 채 B → 간선 A→B), `LLockStack`(TLS), Unlock 순서 검증, 프로파일러 내부는 `std::mutex`(무한 재귀 방지), 🔧 `std::string` 키 / Pop에서 `operator[]` 대신 `find`
+### 🎯 목표
+스레드마다 **지금 잡고 있는 락 스택**을 기록하고, **락을 잡는 순서(A → B)** 를 그래프 간선으로 쌓는다. Unlock 순서가 틀리면 즉시 크래시.
+
+### 📖 개념
+**데드락은 락을 잡는 순서가 엇갈릴 때 생긴다**
+```
+스레드 1: A 잡음 → B 대기
+스레드 2: B 잡음 → A 대기     → 서로 영원히 기다림
+```
+두 스레드의 타이밍이 정확히 겹쳐야만 터지므로 테스트에서는 잘 안 보이고, 라이브에서 접속자가 많을 때 터진다.
+
+**아이디어: 실제로 엇갈리기 전에 "순서"만 보고 잡아낸다**
+- A를 잡은 채 B를 잡으면 **간선 A → B** 기록.
+- 나중에 어느 스레드든 B를 잡은 채 A를 잡으면 **간선 B → A** → 그래프에 **사이클**.
+- 사이클 = "반대 순서로 잡는 코드가 존재한다" = 데드락 가능성. 타이밍이 겹치지 않았어도 크래시로 알린다. (사이클 검사는 Step 5)
+
+**락 스택 (`LLockStack`, TLS)**
+- Push: 스택 맨 위(직전 락) → 새 락 간선 기록 후 Push
+- Pop: 맨 위와 풀려는 락이 다르면 **Unlock 순서 위반**
+- 락에는 소유자 정보가 없지만(Step 2 Q2), **스레드 쪽 스택**에서 검증한다.
+
+**Profiler 내부는 `std::mutex`와 std 컨테이너만 쓴다**
+→ 우리 `Lock`을 쓰면 Lock → Profiler → Lock → … **무한 재귀**. 같은 이유로 Phase 1-3의 메모리 풀 컨테이너도 Profiler 안에서는 쓰지 않는다.
+
+### 🧱 핵심 코드
+```cpp
+void DeadLockProfiler::PushLock(const char* name)
+{
+	LockGuard guard(lock_);
+	const int32 lockId = GetOrCreateLockId(name);
+
+	if (LLockStack.empty() == false)
+	{
+		const int32 prevId = LLockStack.top();
+		if (prevId != lockId)                                // 같은 락 재진입은 순서가 아니다
+		{
+			std::set<int32>& history = lockHistory_[prevId];
+			if (history.insert(lockId).second)               // 처음 보는 순서일 때만
+				CheckCycle();
+		}
+	}
+	LLockStack.push(lockId);
+}
+
+void DeadLockProfiler::PopLock(const char* name)
+{
+	LockGuard guard(lock_);
+	if (LLockStack.empty())
+		CRASH("MULTIPLE_UNLOCK");
+
+	auto findIt = nameToId_.find(name);                      // operator[]는 없는 이름을 새로 등록해 버린다
+	if (findIt == nameToId_.end())
+		CRASH("UNKNOWN_LOCK");
+
+	if (LLockStack.top() != findIt->second)
+		CRASH("INVALID_UNLOCK_ORDER");                       // 마지막에 잡은 락부터 풀어야 한다
+	LLockStack.pop();
+}
+```
+```cpp
+// Lock.cpp — 네 함수 모두 맨 앞에
+#ifdef _DEBUG
+	GDeadLockProfiler->PushLock(name);   // ReadLock도 Push, 두 Unlock은 PopLock
+#endif
+```
+```cpp
+// CoreGlobal — Profiler는 ThreadManager 다음에 생성, ThreadManager 다음에 삭제
+```
+> 📝 **내 메모 — 소멸 순서**
+> Worker Thread는 Lock을 잡을 때마다 Profiler를 호출한다. 그래서 Profiler를 먼저 지우면 아직 돌고 있는 Thread가 해제된 Profiler에 접근한다.
+
+### 🔧 강의와 다른 점
+| 개선 | 이유 |
+|---|---|
+| 키를 `const char*` → **`std::string`** | 강의는 문자열 **주소**로 비교. 같은 `"Room"`이라도 다른 .cpp/**DLL**에서 오면 주소가 달라 다른 락으로 인식될 수 있다 (클라이언트 엔진은 DLL 여러 개). Debug 전용이라 비용 감수 |
+| Pop에서 `operator[]` → **`find` + `UNKNOWN_LOCK`** | `map[name]`은 없는 이름을 ID 0으로 조용히 등록 → 엉뚱한 비교로 버그가 숨는다 |
+| ID → 이름을 `unordered_map` → **`std::vector`** | ID가 0부터 순서대로 발급되므로 인덱스로 바로 찾는다 |
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| `#ifdef DEBUG` | MSVC는 **`_DEBUG`** 를 정의 → 블록이 항상 빠짐. 경고도 없음 | 기대한 크래시(`UNKNOWN_LOCK`)가 안 나는 것도 실패다. `#ifdef` 블록이 실제로 컴파일되는지 확인 |
+| 프로파일러 호출을 `WriteLock`에만 넣음 | Push만 쌓이고 Pop 없음 → Step 5에서 잘못된 간선으로 오탐 | Push/Pop은 반드시 짝 |
+| 헤더 내용을 두 번 붙여넣음 | `C2011 class 재정의` | `#pragma once`는 다른 파일의 중복 include만 막는다. 한 파일 안의 중복 정의는 못 막음 |
+| VS에 파일을 열어 둔 채 외부에서 수정 | VS가 옛 내용으로 다시 저장 → 코드 유실 | "외부 변경 내용 자동 다시 로드" 옵션 켜기 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 기대 결과 |
+|---|---|
+| `LockReentrancy` | Write → Write → Read 재진입 후 역순 해제, 다른 스레드가 바로 잡힘 → `OK` |
+| `LockContention` | 1~10,000 Push(Writer 1) + Snapshot(Reader 3). 항상 `sum == size*(size+1)/2` → `bad reads : 0`, `OK` |
+| `CrashInvalidUnlockOrder` | 💥 `INVALID_UNLOCK_ORDER` (Release는 FAIL 출력) |
+| `CrashUnknownLock` | 💥 `UNKNOWN_LOCK` (Release는 FAIL 출력) |
+| `CrashThreadIdZero` | 💥 `ASSERT_CRASH(LThreadId != 0 ...)` (Release에서도) |
+
+### 🧩 복습 질문
+**Q1. 같은 클래스의 서로 다른 객체 두 개(Room 1, Room 2)를 차례로 잡으면 Profiler는 어떻게 인식하나? 한계는?**
+> (미답변)
+
+**Q2. `PushLock`을 실제 락 획득 *전*에 호출하는 이유는?** (힌트: 진짜 데드락에 걸린 스레드는 CAS 루프에서 못 나온다)
+> (미답변)
+
+---
+
+## Step 5. DeadLockProfiler — CheckCycle (DFS) 🚧
+
+> 작성 중. 핵심 키워드: 3색 DFS(NotVisited / Visiting / Finished), Visiting 노드로 가는 간선 = 역방향 간선 = 사이클, parents로 사이클 경로 복원
