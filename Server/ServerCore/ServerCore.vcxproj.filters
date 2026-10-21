@@ -25,6 +25,12 @@
     <Filter Include="Thread">
       <UniqueIdentifier>{fe60dfd3-d62f-4fa3-be42-eef0f8f369b9}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Lock">
+      <UniqueIdentifier>{9ba55940-06b6-4051-acf3-c6c81a4056b5}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Core">
+      <UniqueIdentifier>{0a4c137b-ed72-422b-865f-6bd71ef2ff22}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="pch.h">
@@ -45,8 +51,11 @@
     <ClInclude Include="ThreadManager.h">
       <Filter>Thread</Filter>
     </ClInclude>
+    <ClInclude Include="Lock.h">
+      <Filter>Lock</Filter>
+    </ClInclude>
     <ClInclude Include="CoreGlobal.h">
-      <Filter>헤더 파일</Filter>
+      <Filter>Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
@@ -62,8 +71,11 @@
     <ClCompile Include="ThreadManager.cpp">
       <Filter>Thread</Filter>
     </ClCompile>
+    <ClCompile Include="Lock.cpp">
+      <Filter>Lock</Filter>
+    </ClCompile>
     <ClCompile Include="CoreGlobal.cpp">
-      <Filter>소스 파일</Filter>
+      <Filter>Core</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

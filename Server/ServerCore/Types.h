@@ -8,7 +8,6 @@
 // Types.h는 가장 아래층 헤더다. 다른 ServerCore 헤더를 include하지 않는다.
 // (CoreMacro.h가 Types.h를 include하는 방향으로만 의존)
 
-
 /*
 	[정수 타입]
 */

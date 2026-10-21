@@ -2,6 +2,7 @@
 #include <thread>
 #include <vector>
 #include <functional>
+#include "Types.h"
 
 class ThreadManager
 {
