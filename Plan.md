@@ -11,17 +11,26 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-1 Step 5 `CoreGlobal`** 코드 완료, 확인 질문 남음 |
-| 완료 | Phase 0 / Phase 1-1 Step 1~5 (Types, CoreMacro, CoreTLS, ThreadManager, CoreGlobal) |
-| 남은 숙제 | Step 5 확인 질문 2개 미답변 ↓ |
+| 현재 위치 | **Phase 1-2 Step 3 `ReadLockGuard`/`WriteLockGuard` + `USE_LOCK` 매크로** 코드 완료, 테스트 남음 |
+| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 Step 1~3 코드 (Lock Write/Read, LockGuard, 매크로) |
+| 남은 숙제 | Lock 테스트 없음(매크로는 아직 한 번도 펼쳐진 적 없음), 확인 질문 미답변 ↓ |
 
-**Step 5 확인 질문 (미답변)**
-1. 헤더에 `ThreadManager* GThreadManager = nullptr;`처럼 정의를 바로 쓰면, 여러 .cpp가 include할 때 어떤 일이 생기나? (`extern`이 왜 필요한가)
-2. 소멸자에서 `delete GThreadManager;`를 다른 매니저보다 먼저 하는 이유는?
+**확인 질문 (미답변)**
+- Phase 1-1 Step 6: ① 카운터 1개 증가에 Atomic과 Mutex 중 무엇이 적합한가 ② Release에서 보호 없는 카운터가 우연히 기댓값과 같게 나오는 이유와 그 의미
+- Phase 1-2 Step 1: ① 락 획득에 load → store 대신 CAS가 필요한 이유 ② 재진입 검사(load 후 비교)가 안전한 이유
+- Phase 1-2 Step 3: ① 이름 없는 가드 `WriteLockGuard(locks_[0], "Room");`는 어떻게 되나 ② `READ_LOCK` 중 `Push()`(WRITE_LOCK) 호출 시 결과
+
+**Lock 테스트 남은 일 (Step 4 전에 권장)**
+- `WriteLockCounter()`는 Write 재진입만 확인한다 (출력 없음, Lock/Unlock name 불일치 → Step 4 DeadLockProfiler에서 크래시 예정)
+- 매크로 경합 테스트: `USE_LOCK` + `std::vector<int32>` 클래스, `Push`(WRITE_LOCK) / `Sum`(READ_LOCK), Writer 1 + Reader 3, 원소 개수 == N 검증
+- 선택: Write → Read 재진입, Read → Write 타임아웃, `std::thread`로 만든 스레드(LThreadId 0)의 ASSERT_CRASH
+- 사소함: `Lock.h` 빈 줄 3개 연속 2곳, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음, 문장 깨짐), `GameServer.cpp`의 불필요한 `ThreadManager.h` include, `constexpr int32`
 
 **다음에 할 일**
-1. Step 5 확인 질문 답변 → Claude가 확인
-2. Step 6 `CorePch` 정리 + 스레드 테스트 (GameServer 테스트 코드 정리, `std::thread` 사용부의 간접 include 의존 정리)
+1. Lock 매크로 경합 테스트 (위)
+2. Phase 1-2 Step 4 DeadLockProfiler → Step 5 경합 테스트
+
+**테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각.
 
 **참고**: `CoreGlobal`은 전역 객체가 아니라 `main` 첫 줄의 지역 객체로 생성한다 (정적 lib .obj 누락 방지, 초기화 시점 제어). 클라이언트에서는 `NetworkManager` 멤버로 둔다.
 
@@ -118,12 +127,13 @@ Phase 9  포트폴리오 정리
 - [x] Step 3 `CoreTLS` (`LThreadId`만. 나머지 TLS는 해당 Phase에서 추가)
 - [x] Step 4 `ThreadManager` (Launch / Join / InitTLS / DestroyTLS, 멤버 `lock_`, `threads_`)
 - [x] Step 5 `CoreGlobal` (전역 매니저 생성/소멸 순서, `main`의 지역 객체로 생성, 복사 금지 + 중복 생성 ASSERT)
-- [ ] Step 6 `CorePch` 정리 + 스레드 테스트
+- [x] Step 6 `CorePch` 정리(`using namespace std` 제거, 자립 헤더) + 스레드 테스트(`Test.h`/`Test.cpp` 분리)
 - 미룬 항목: Lock 매크로(`USE_LOCK`/`READ_LOCK`/`WRITE_LOCK`) → 1-2, `LLockStack` → 1-2, `LSendBufferChunk` → 1-5, `LEndTickCount`/`LCurrentJobQueue` → 1-6
 
 ### 1-2. 동기화
-- [ ] `Lock` (RW SpinLock: [WriteThreadId 16bit][ReadCount 16bit], 재귀 Write 허용)
-- [ ] `ReadLockGuard` / `WriteLockGuard`
+- [x] Step 1 `Lock` WriteLock/WriteUnlock (테스트 보완 남음) (CAS, 재귀 Write, 타임아웃) — 🔧 `LThreadId == 0` 검증, Unlock 소유자 검증, `steady_clock`
+- [x] Step 2 `Lock` ReadLock/ReadUnlock (RW SpinLock: [WriteThreadId 16bit][ReadCount 16bit]) (테스트 남음)
+- [x] Step 3 `ReadLockGuard` / `WriteLockGuard` + `USE_LOCK`/`READ_LOCK`/`WRITE_LOCK` 매크로 (Lock.h에 둠), CorePch에 Lock.h 추가 (테스트 남음)
 - [ ] `DeadLockProfiler` (Debug 전용, 락 순서 그래프 DFS로 사이클 검출)
 - [ ] 테스트: 스레드 여러 개로 공유 컨테이너 Read/Write 경합 → 크래시 없음
 
