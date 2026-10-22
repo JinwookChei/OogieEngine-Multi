@@ -18,3 +18,4 @@
 #include "CoreTLS.h"
 #include "CoreGlobal.h"
 #include "Lock.h"
+#include "Memory.h"

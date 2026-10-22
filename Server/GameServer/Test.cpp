@@ -3,6 +3,7 @@
 #include <vector>
 #include "ThreadManager.h"
 #include "Lock.h"
+#include "Memory.h"
 #include "Test.h"
 
 
@@ -264,6 +265,67 @@ void CrashDeadLockCycle()
 	GThreadManager->Join();
 
 	std::cout << "[CrashDeadLockCycle] FAIL : 크래시가 나지 않았다" << std::endl;
+}
+
+
+class MemoryTestKnight
+{
+public:
+	MemoryTestKnight(int32 hp, int32 attack) : hp_(hp), attack_(attack) 
+	{
+		++SConstructCount;
+	}
+	~MemoryTestKnight()
+	{
+		++SDestructCount;
+	}
+
+	inline static int32 SConstructCount = 0;
+	inline static int32 SDestructCount = 0;
+
+	int32 hp_;
+	int32 attack_;
+};
+
+void XnewXdelete()
+{
+	// 다른 테스트가 먼저 MemoryTestKnight를 써도 기댓값이 틀어지지 않게 초기화한다
+	MemoryTestKnight::SConstructCount = 0;
+	MemoryTestKnight::SDestructCount = 0;
+
+	// 1) 생성: 생성자가 한 번 호출되고, 인자가 그대로 전달되어야 한다
+	MemoryTestKnight* knight = xnew<MemoryTestKnight>(100, 10);
+	if (MemoryTestKnight::SConstructCount != 1 || MemoryTestKnight::SDestructCount != 0)
+	{
+		std::cout << "[XnewXdelete] FAIL : xnew 후 생성자/소멸자 호출 횟수 (construct "
+			<< MemoryTestKnight::SConstructCount << ", destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
+		return;
+	}
+	if (knight->hp_ != 100 || knight->attack_ != 10)
+	{
+		std::cout << "[XnewXdelete] FAIL : 생성자 인자 전달 (hp " << knight->hp_ << ", attack " << knight->attack_ << ")" << std::endl;
+		return;
+	}
+
+	// 2) 해제: 소멸자가 한 번 호출되어야 한다
+	xdelete(knight);
+	if (MemoryTestKnight::SDestructCount != 1)
+	{
+		std::cout << "[XnewXdelete] FAIL : xdelete 후 소멸자 호출 횟수 (destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
+		return;
+	}
+
+	// 3) nullptr 해제: 크래시 없이 아무 일도 하지 않아야 한다 (소멸자 호출 X)
+	// nullptr만 넘기면 Type을 추론할 수 없으므로 타입이 있는 포인터 변수로 넘긴다
+	MemoryTestKnight* nullKnight = nullptr;
+	xdelete(nullKnight);
+	if (MemoryTestKnight::SDestructCount != 1)
+	{
+		std::cout << "[XnewXdelete] FAIL : xdelete(nullptr)가 소멸자를 호출함 (destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
+		return;
+	}
+
+	std::cout << "[XnewXdelete] OK" << std::endl;
 }
 
 
