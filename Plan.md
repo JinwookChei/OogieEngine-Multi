@@ -11,9 +11,9 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-2 완료** → 커밋 후 Phase 1-3 메모리 Step 1 시작 예정 |
+| 현재 위치 | **Phase 1-3 Step 1 완료** (BaseAllocator + xnew/xdelete) → 커밋 후 Step 2 StompAllocator |
 | 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) |
-| 남은 숙제 | Step 5~6 코드 커밋 안 함, 크래시 테스트 3개(`CrashInvalidUnlockOrder`/`CrashUnknownLock`/`CrashThreadIdZero`) 사용자 확인 필요, 확인 질문 미답변 ↓ |
+| 남은 숙제 | 크래시 테스트 3개(`CrashInvalidUnlockOrder`/`CrashUnknownLock`/`CrashThreadIdZero`) 사용자 확인 필요, 확인 질문 미답변 ↓ |
 
 **확인 질문 (미답변)**
 - Phase 1-1 Step 6: ① 카운터 1개 증가에 Atomic과 Mutex 중 무엇이 적합한가 ② Release에서 보호 없는 카운터가 우연히 기댓값과 같게 나오는 이유와 그 의미
@@ -21,17 +21,18 @@
 - Phase 1-2 Step 3: ① 이름 없는 가드 `WriteLockGuard(locks_[0], "Room");`는 어떻게 되나 ② `READ_LOCK` 중 `Push()`(WRITE_LOCK) 호출 시 결과
 - Phase 1-2 Step 4: ① 같은 클래스의 서로 다른 객체 2개를 차례로 잡으면 Profiler는 어떻게 인식하나 (한계) ② PushLock을 실제 Lock 획득 전에 호출하는 이유
 - Phase 1-2 Step 5: ① `Visited`도 크래시로 처리하면 ◇ 예제(A→B, A→C, C→B)의 어느 단계에서 오탐이 나나 ② `CheckCycle` 끝의 `visitStates_.clear()`를 지워도 되나
+- Phase 1-3 Step 1: ① `xdelete`에서 소멸자 호출을 빼먹으면 생기는 문제 (멤버 `std::vector`) ② `Args&&` + `forward` 대신 값으로 받으면 달라지는 점
 - Phase 1-2 Step 6: ① 두 스레드를 Join 없이 동시에 돌려도 진짜 데드락 전에 Profiler가 먼저 크래시를 낼 수 있는 이유 ② 스레드 1개로 P→Q, 해제, Q→P를 해도 크래시가 나나? 그럼 왜 스레드 2개로 테스트하나
 
 **테스트 현황** (`GameServer/Test.cpp`, Step 4·6에서 사용자 요청으로 Claude가 작성)
-- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock` → Debug/Release 모두 통과
+- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete` → Debug/Release 모두 통과
 - `CrashDeadLockCycle` → Debug에서 `DEADLOCK: Cycle_R -> Cycle_P` 출력 후 크래시, Release는 FAIL 출력 (Claude가 확인)
 - 크래시 (F5로 하나씩): `CrashInvalidUnlockOrder`, `CrashUnknownLock`, `CrashThreadIdZero` → 사용자 확인 필요. Release에서는 Profiler 2개가 FAIL 출력이 정상
 - 사소함: `#endif // DEBUG` → `// _DEBUG`, `CoreTLS.h` 주석 스페이스 들여쓰기, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음)
 
 **다음에 할 일**
-1. Phase 1-2 Step 5~6 커밋 + push
-2. Phase 1-3 메모리 Step 1 안내
+1. Phase 1-3 Step 1 커밋
+2. Step 2 StompAllocator 안내
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각.
 
@@ -142,7 +143,8 @@ Phase 9  포트폴리오 정리
 - [x] Step 6 테스트: `CrashDeadLockCycle`(스레드 1: P→Q, Join 후 스레드 2: Q→R→P) → DEADLOCK_DETECTED, `NoCycleLock`(◇ 모양 + 분리된 덩어리) → 통과 (경합 테스트는 Step 4의 `LockContention`)
 
 ### 1-3. 메모리
-- [ ] `BaseAllocator` / `StompAllocator` / `PoolAllocator` / `StlAllocator`
+- [x] Step 1 `BaseAllocator` + `xnew`/`xdelete` (`Memory.h`, placement new, 완벽 전달) — 🔧 nullptr 검사, 정렬 `STATIC_ASSERT`, 테스트 `XnewXdelete`
+- [ ] `StompAllocator` / `PoolAllocator` / `StlAllocator`
 - [ ] `MemoryPool` (SLIST lock-free), `MemoryHeader`
 - [ ] `Memory` (32~4096 크기별 풀 테이블), `xnew` / `xdelete` / `MakeShared`
 - [ ] `ObjectPool<T>`

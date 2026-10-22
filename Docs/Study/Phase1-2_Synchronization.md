@@ -10,8 +10,8 @@
 | 2 | `Lock.h/.cpp` | ReadLock / ReadUnlock | ✅ |
 | 3 | `Lock.h` | ReadLockGuard / WriteLockGuard + `USE_LOCK` 매크로 | ✅ |
 | 4 | `DeadLockProfiler.h/.cpp` | 락 스택, 순서 기록, Unlock 순서 검증 | ✅ |
-| 5 | `DeadLockProfiler.cpp` | CheckCycle (DFS 사이클 검출) | 🚧 |
-| 6 | `GameServer/Test.*` | 경합 테스트, 역순 락 검출 | ⬜ |
+| 5 | `DeadLockProfiler.cpp` | CheckCycle (DFS 사이클 검출) | ✅ |
+| 6 | `GameServer/Test.*` | ◇ 모양 통과, 역순 락 검출 | ✅ |
 
 ---
 

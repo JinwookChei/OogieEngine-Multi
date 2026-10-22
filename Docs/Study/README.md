@@ -12,7 +12,7 @@
 | 0 | [Phase0_Setup.md](Phase0_Setup.md) | 솔루션 구성, 빌드 설정, PC별 준비물 | ✅ 완료 |
 | 1-1 | [Phase1-1_Foundation.md](Phase1-1_Foundation.md) | Types, CoreMacro, CoreTLS, ThreadManager, CoreGlobal, CorePch | ✅ 완료 |
 | 1-2 | [Phase1-2_Synchronization.md](Phase1-2_Synchronization.md) | Atomic vs Mutex, RW SpinLock, LockGuard, DeadLockProfiler(DFS 사이클 검출) | ✅ 완료 |
-| 1-3 | — | 메모리 (Allocator, MemoryPool, ObjectPool) | ⬜ |
+| 1-3 | [Phase1-3_Memory.md](Phase1-3_Memory.md) | 메모리 (Allocator, MemoryPool, ObjectPool) | 🚧 진행 중 |
 | 1-4 | — | 네트워크 (IOCP, Session, Service) | ⬜ |
 | 1-5 | — | 버퍼 & 패킷 조립 | ⬜ |
 | 1-6 | — | Job 시스템 | ⬜ |
@@ -26,7 +26,8 @@ GameServer (exe) ──include──▶ pch.h ──▶ CorePch.h ─┬─ Type
 DummyClient (exe)                                   ├─ CoreMacro.h    (CRASH, ASSERT_CRASH, size32 ...)
                                                     ├─ CoreTLS.h      (LThreadId, LLockStack)
         ServerCore.lib (static) ◀──link──           ├─ CoreGlobal.h   (GThreadManager, GDeadLockProfiler)
-                                                    └─ Lock.h         (RW SpinLock, LockGuard, USE_LOCK)
+                                                    ├─ Lock.h         (RW SpinLock, LockGuard, USE_LOCK)
+                                                    └─ Memory.h       (xnew / xdelete → Allocator.h)
 
 main()
  └─ CoreGlobal coreGlobal;   ← 전역 매니저 생성 (소멸은 main 종료 시 역순)
