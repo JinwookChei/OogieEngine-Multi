@@ -11,8 +11,9 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 Step 1 완료** (BaseAllocator + xnew/xdelete) → 커밋 후 Step 2 StompAllocator |
-| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) |
+| 현재 위치 | **Phase 1-3 Step 2 `StompAllocator`** 안내 전 (Step 1까지 커밋·push 완료, 작업 트리 깨끗함) |
+| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) |
+| 마지막 작업 | 2026-10-22 — Phase 1-2 Step 5~6 + Phase 1-3 Step 1 완료. 마지막 커밋 `cc549c1` |
 | 남은 숙제 | 크래시 테스트 3개(`CrashInvalidUnlockOrder`/`CrashUnknownLock`/`CrashThreadIdZero`) 사용자 확인 필요, 확인 질문 미답변 ↓ |
 
 **확인 질문 (미답변)**
@@ -21,8 +22,8 @@
 - Phase 1-2 Step 3: ① 이름 없는 가드 `WriteLockGuard(locks_[0], "Room");`는 어떻게 되나 ② `READ_LOCK` 중 `Push()`(WRITE_LOCK) 호출 시 결과
 - Phase 1-2 Step 4: ① 같은 클래스의 서로 다른 객체 2개를 차례로 잡으면 Profiler는 어떻게 인식하나 (한계) ② PushLock을 실제 Lock 획득 전에 호출하는 이유
 - Phase 1-2 Step 5: ① `Visited`도 크래시로 처리하면 ◇ 예제(A→B, A→C, C→B)의 어느 단계에서 오탐이 나나 ② `CheckCycle` 끝의 `visitStates_.clear()`를 지워도 되나
-- Phase 1-3 Step 1: ① `xdelete`에서 소멸자 호출을 빼먹으면 생기는 문제 (멤버 `std::vector`) ② `Args&&` + `forward` 대신 값으로 받으면 달라지는 점
 - Phase 1-2 Step 6: ① 두 스레드를 Join 없이 동시에 돌려도 진짜 데드락 전에 Profiler가 먼저 크래시를 낼 수 있는 이유 ② 스레드 1개로 P→Q, 해제, Q→P를 해도 크래시가 나나? 그럼 왜 스레드 2개로 테스트하나
+- Phase 1-3 Step 1: ① `xdelete`에서 소멸자 호출을 빼먹으면 생기는 문제 (멤버 `std::vector`) ② `Args&&` + `forward` 대신 값으로 받으면 달라지는 점
 
 **테스트 현황** (`GameServer/Test.cpp`, Step 4·6에서 사용자 요청으로 Claude가 작성)
 - 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete` → Debug/Release 모두 통과
@@ -31,10 +32,14 @@
 - 사소함: `#endif // DEBUG` → `// _DEBUG`, `CoreTLS.h` 주석 스페이스 들여쓰기, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음)
 
 **다음에 할 일**
-1. Phase 1-3 Step 1 커밋
-2. Step 2 StompAllocator 안내
+0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`)
+1. **Phase 1-3 Step 2 `StompAllocator` 안내** (Claude가 Step 형식으로 설명 → 사용자 작성 → 리뷰)
+   - 내용: `VirtualAlloc`/`VirtualFree`로 페이지(4KB) 단위 할당, 데이터를 **페이지 끝에 붙여** 오버플로도 검출, 해제 후 접근(Use-After-Free) 시 즉시 Access Violation
+   - 🔧 개선 포인트: 강의 결함 #5 `_STOMP`가 항상 켜짐 → **Debug 전용**으로 분리 (`Memory.h`에서 할당기 선택)
+   - 예정 테스트 이름: `StompAllocFree`(정상), `CrashStompUseAfterFree`, `CrashStompOverflow`(크래시)
+2. Step 3 이후: `MemoryHeader` + `MemoryPool`(SLIST) → `Memory`(풀 테이블) + `PoolAllocator` → `MakeShared` → `StlAllocator` + `Container.h` → `ObjectPool<T>`
 
-**테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각.
+**테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각. 지시할 때는 **테스트 함수 이름과 보조 클래스 이름을 먼저 정해서** 준다. 정상 테스트는 `main`에서 항상 켜 두고, 크래시 테스트(`Crash` 접두사)만 주석으로 둔다. 테스트는 값을 출력만 하지 않고 코드가 비교해서 `OK`/`FAIL`을 낸다.
 
 **참고**: `CoreGlobal`은 전역 객체가 아니라 `main` 첫 줄의 지역 객체로 생성한다 (정적 lib .obj 누락 방지, 초기화 시점 제어). 클라이언트에서는 `NetworkManager` 멤버로 둔다.
 
