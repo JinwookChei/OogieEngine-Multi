@@ -23,6 +23,16 @@ public:
 private:
 	int32 GetOrCreateLockId(const char* name);
 	void CheckCycle();
+	void Dfs(int32 cur);
+
+private:
+	// DFS 중 노드의 상태
+	enum class VisitState : uint8
+	{
+		NotVisited,	// 아직 들어가지 않음
+		Visiting,	// 들어갔지만 아직 나오지 않음 (현재 탐색 경로 위에 있음)
+		Visited,	// 나가는 간선을 모두 조사하고 나옴 (여기서 시작하는 사이클 없음)
+	};
 
 private:
 	Mutex lock_;
@@ -30,5 +40,7 @@ private:
 	std::unordered_map<std::string, int32> nameToId_;
 	std::vector<std::string> idToName_;
 	std::map<int32, std::set<int32>> lockHistory_;
+
+	std::vector<VisitState> visitStates_;
 };
 

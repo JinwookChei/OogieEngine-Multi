@@ -150,6 +150,44 @@ void LockContention()
 	std::cout << "[LockContention] OK" << std::endl;
 }
 
+void NoCycleLock()
+{
+	Lock lockX;
+	Lock lockY;
+	Lock lockZ;
+	Lock lockC;
+	Lock lockD;
+
+	// ◇ 모양: X → Y, X → Z, Z → Y
+	// 갈라졌다 다시 만나지만 되돌아오는 길은 없다 → Visited 노드에 도착하는 경로를 검증
+	GThreadManager->Launch([&lockX, &lockY, &lockZ]()
+		{
+			lockX.WriteLock("NoCycle_X");
+			lockY.WriteLock("NoCycle_Y");     // 간선 X → Y
+			lockY.WriteUnlock("NoCycle_Y");
+
+			lockZ.WriteLock("NoCycle_Z");     // 간선 X → Z
+			lockY.WriteLock("NoCycle_Y");     // 스택 top이 Z이므로 간선 Z → Y
+			lockY.WriteUnlock("NoCycle_Y");
+			lockZ.WriteUnlock("NoCycle_Z");
+
+			lockX.WriteUnlock("NoCycle_X");
+		});
+	GThreadManager->Join();
+
+	// 서로 연결되지 않은 덩어리: C → D (모든 노드를 시작점 후보로 순회하는지 검증)
+	GThreadManager->Launch([&lockC, &lockD]()
+		{
+			lockC.WriteLock("NoCycle_C");
+			lockD.WriteLock("NoCycle_D");     // 간선 C → D
+			lockD.WriteUnlock("NoCycle_D");
+			lockC.WriteUnlock("NoCycle_C");
+		});
+	GThreadManager->Join();
+
+	std::cout << "[NoCycleLock] OK" << std::endl;
+}
+
 
 /*
 	[크래시 테스트] 한 번에 하나만 호출한다
@@ -193,6 +231,39 @@ void CrashThreadIdZero()
 	t.join();
 
 	std::cout << "[CrashThreadIdZero] FAIL : 크래시가 나지 않았다" << std::endl;
+}
+
+void CrashDeadLockCycle()
+{
+	Lock lockP;
+	Lock lockQ;
+	Lock lockR;
+
+	// 스레드 1: P → Q
+	GThreadManager->Launch([&lockP, &lockQ]()
+		{
+			lockP.WriteLock("Cycle_P");
+			lockQ.WriteLock("Cycle_Q");       // 간선 P → Q
+			lockQ.WriteUnlock("Cycle_Q");
+			lockP.WriteUnlock("Cycle_P");
+		});
+
+	// 스레드 1이 락을 모두 푼 뒤에 시작한다 (실행 시간이 겹치지 않아도 검출되는지 확인)
+	GThreadManager->Join();
+
+	// 스레드 2: Q → R → P
+	GThreadManager->Launch([&lockP, &lockQ, &lockR]()
+		{
+			lockQ.WriteLock("Cycle_Q");
+			lockR.WriteLock("Cycle_R");       // 간선 Q → R
+			lockP.WriteLock("Cycle_P");       // 간선 R → P → 사이클 P → Q → R → P → DEADLOCK_DETECTED
+			lockP.WriteUnlock("Cycle_P");
+			lockR.WriteUnlock("Cycle_R");
+			lockQ.WriteUnlock("Cycle_Q");
+		});
+	GThreadManager->Join();
+
+	std::cout << "[CrashDeadLockCycle] FAIL : 크래시가 나지 않았다" << std::endl;
 }
 
 
