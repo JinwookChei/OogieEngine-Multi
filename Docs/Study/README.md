@@ -11,7 +11,7 @@
 |---|---|---|---|
 | 0 | [Phase0_Setup.md](Phase0_Setup.md) | 솔루션 구성, 빌드 설정, PC별 준비물 | ✅ 완료 |
 | 1-1 | [Phase1-1_Foundation.md](Phase1-1_Foundation.md) | Types, CoreMacro, CoreTLS, ThreadManager, CoreGlobal, CorePch | ✅ 완료 |
-| 1-2 | [Phase1-2_Synchronization.md](Phase1-2_Synchronization.md) | Atomic vs Mutex, RW SpinLock, LockGuard, DeadLockProfiler | 🚧 진행 중 |
+| 1-2 | [Phase1-2_Synchronization.md](Phase1-2_Synchronization.md) | Atomic vs Mutex, RW SpinLock, LockGuard, DeadLockProfiler(DFS 사이클 검출) | ✅ 완료 |
 | 1-3 | — | 메모리 (Allocator, MemoryPool, ObjectPool) | ⬜ |
 | 1-4 | — | 네트워크 (IOCP, Session, Service) | ⬜ |
 | 1-5 | — | 버퍼 & 패킷 조립 | ⬜ |
