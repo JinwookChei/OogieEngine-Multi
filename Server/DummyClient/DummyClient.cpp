@@ -2,5 +2,5 @@
 
 int main()
 {
-	cout << "DummyClient Start" << endl;
+	std::cout << "DummyClient Start" << std::endl;
 }

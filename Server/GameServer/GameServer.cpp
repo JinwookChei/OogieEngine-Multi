@@ -1,17 +1,26 @@
 ﻿#include "pch.h"
+#include "ThreadManager.h"
+#include "Test.h"
 
 
-int main()
+int main(int argc, char* argv[])
 {
-    cout << "GameServer Start" << endl;
+	CoreGlobal coreGlobal;
+	std::cout << "GameServer Start" << std::endl;
 
-    int32 arr[10];
-    cout << "size32(arr) = " << size32(arr) << endl;   // 40
-    cout << "len32(arr)  = " << len32(arr) << endl;    // 10
+	// ThreadRace();
+	// WriteLockCounter();
 
-#ifdef _STOMP
-    cout << "STOMP : ON" << endl;
-#else
-    cout << "STOMP : OFF" << endl;
-#endif
+	LockReentrancy();
+	LockContention();
+	NoCycleLock();
+	XnewXdelete();
+
+	// 크래시 테스트: 하나씩 주석을 풀고 실행 → 크래시 확인 후 다시 주석 처리
+	// CrashInvalidUnlockOrder();
+	// CrashUnknownLock();
+	// CrashThreadIdZero();
+	// CrashDeadLockCycle();
+
+	std::cout << "GameServer End" << std::endl;
 }
