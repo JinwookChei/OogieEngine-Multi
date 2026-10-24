@@ -11,14 +11,12 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 Step 2 `StompAllocator`** 안내 전 (Step 1까지 커밋·push 완료, 작업 트리 깨끗함) |
+| 현재 위치 | **Phase 1-3 Step 2 `StompAllocator`** 구현 중 — 헤더 선언 + 동작 설명 주석 완료(Claude 작성, 사용자 요청), `Allocator.cpp`는 사용자가 작성 중(현재 malloc 임시 코드). 다음: 구현 → `Memory.h` 할당기 선택 → 테스트 3개 → 리뷰 (확인 질문은 Phase 1-2 Step 3부터 이어서) |
 | 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) |
-| 마지막 작업 | 2026-10-22 — Phase 1-2 Step 5~6 + Phase 1-3 Step 1 완료. 마지막 커밋 `cc549c1` |
-| 남은 숙제 | 크래시 테스트 3개(`CrashInvalidUnlockOrder`/`CrashUnknownLock`/`CrashThreadIdZero`) 사용자 확인 필요, 확인 질문 미답변 ↓ |
+| 마지막 작업 | 2026-10-24 — 크래시 테스트 3개 확인 완료, 콘솔 한글 깨짐 수정(`SetConsoleOutputCP(CP_UTF8)`), 확인 질문 Phase 1-1 Step 6 / Phase 1-2 Step 1 답변 |
+| 남은 숙제 | 확인 질문 미답변 ↓ (Phase 1-2 Step 3 ①은 사용자가 다음에 풀기로 함) |
 
 **확인 질문 (미답변)**
-- Phase 1-1 Step 6: ① 카운터 1개 증가에 Atomic과 Mutex 중 무엇이 적합한가 ② Release에서 보호 없는 카운터가 우연히 기댓값과 같게 나오는 이유와 그 의미
-- Phase 1-2 Step 1: ① 락 획득에 load → store 대신 CAS가 필요한 이유 ② 재진입 검사(load 후 비교)가 안전한 이유
 - Phase 1-2 Step 3: ① 이름 없는 가드 `WriteLockGuard(locks_[0], "Room");`는 어떻게 되나 ② `READ_LOCK` 중 `Push()`(WRITE_LOCK) 호출 시 결과
 - Phase 1-2 Step 4: ① 같은 클래스의 서로 다른 객체 2개를 차례로 잡으면 Profiler는 어떻게 인식하나 (한계) ② PushLock을 실제 Lock 획득 전에 호출하는 이유
 - Phase 1-2 Step 5: ① `Visited`도 크래시로 처리하면 ◇ 예제(A→B, A→C, C→B)의 어느 단계에서 오탐이 나나 ② `CheckCycle` 끝의 `visitStates_.clear()`를 지워도 되나
@@ -28,7 +26,8 @@
 **테스트 현황** (`GameServer/Test.cpp`, Step 4·6에서 사용자 요청으로 Claude가 작성)
 - 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete` → Debug/Release 모두 통과
 - `CrashDeadLockCycle` → Debug에서 `DEADLOCK: Cycle_R -> Cycle_P` 출력 후 크래시, Release는 FAIL 출력 (Claude가 확인)
-- 크래시 (F5로 하나씩): `CrashInvalidUnlockOrder`, `CrashUnknownLock`, `CrashThreadIdZero` → 사용자 확인 필요. Release에서는 Profiler 2개가 FAIL 출력이 정상
+- 크래시 (F5로 하나씩): `CrashInvalidUnlockOrder`(INVALID_UNLOCK_ORDER), `CrashUnknownLock`(UNKNOWN_LOCK), `CrashThreadIdZero`(ASSERT_CRASH LThreadId) → 사용자 확인 완료 (2026-10-24). Release에서는 Profiler 2개가 FAIL 출력이 정상
+- ⚠️ `GameServer.cpp`: 정상 테스트 4개가 주석 처리된 상태 + `Atomic<int32> a` 실험 코드 남아 있음 → 다시 켜고 정리할 것
 - 사소함: `#endif // DEBUG` → `// _DEBUG`, `CoreTLS.h` 주석 스페이스 들여쓰기, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음)
 
 **다음에 할 일**
