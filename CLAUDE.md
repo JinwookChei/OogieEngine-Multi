@@ -23,6 +23,8 @@
 - 강의 코드와 다르게 작성하는 부분(🔧 개선, 표준 C++ 대체 등)은 그 이유를 함께 설명한다.
   - 단, **강의와 비교하는 내용은 대화 설명에서만** 한다. 코드 예시의 주석에는 "강의처럼", "🔧 강의 대신" 같은 비교 문구를 넣지 않는다. 주석에는 그 코드가 무엇을 하고 왜 그렇게 하는지만 쓴다.
 - **테스트 코드는 완성 코드를 주지 않는다.** 작은 단위의 지시(무엇을 만들고 무엇을 확인할지)만 단계별로 준다. 사용자가 **힌트를 요청할 때만** 짧은 예시 코드 조각을 준다. (기능 코드인 ServerCore 등은 기존처럼 코드 예시를 제시한다)
+  - 단, 사용자가 **"테스트를 작성해 달라"고 직접 요청하면** Claude가 테스트를 작성하고, Debug/Release를 빌드·실행해서 결과(OK/FAIL)까지 확인한다. 크래시 테스트는 `main`에 주석으로만 추가하고 실행 확인은 사용자가 F5로 한다.
+  - 테스트 주석이나 출력이 아직 답하지 않은 확인 질문의 답을 드러내면 미리 알린다.
 - **학습 정리 문서** (`Docs/Study/`): 나중에 복기할 때 프로젝트를 이해할 수 있도록 배운 내용을 정리한다.
   - Notion으로 가져올 수 있는 Markdown(UTF-8)으로 쓴다. 제목, 표, 코드 블록, `>` 인용(💡 📝 ⚠️ 🔧 🧩 이모지로 콜아웃 구분), `---` 구분선만 쓴다 (HTML 태그, 토글 X).
   - `README.md`(목차, 공통 규칙, 전체 그림) + Phase별 파일(`Phase1-2_Synchronization.md` 형식).
@@ -94,6 +96,8 @@ Docs/Study/         학습 정리 문서 (Notion 가져오기용 Markdown, Phase
 | 테스트 코드 위치 | `main`이 있는 파일(`GameServer.cpp` 등)에 테스트를 직접 쓰지 않는다. 각 프로젝트의 `Test.h`/`Test.cpp`에 테스트 함수를 만들고 `main`에서 호출만 한다 |
 | 서버 네이밍 | **멤버 변수는 뒤에 `_`** (`lock_`, `threads_`) — 강의의 앞 `_`(`_lock`) 대신 OogieEngine과 통일. 전역 `G`, TLS `L`, 함수 안 static `S` 접두사. 강의 코드를 옮길 때 예시 코드도 이 규칙으로 바꿔 제시한다 |
 | 서버 데이터 타입 | 정수, 포인터, 동기화 타입은 **`ServerCore/Types.h`의 별칭**(`int32`, `uint64`, `uintptr`, `Atomic<T>` 등)을 쓴다. `std::int32_t`, `std::uintptr_t`, `std::size_t`를 직접 쓰지 않는다. **Types.h에 없는 새 타입이 필요하면 추가하기 전에 사용자에게 먼저 묻는다** |
+| `Windows.h` 범위 | `CorePch.h`와 공개 헤더(`Memory.h` 등)에는 `<Windows.h>`를 넣지 않는다 (클라이언트 엔진까지 매크로가 퍼짐). `.cpp`에서 include하고, Windows 타입이 꼭 필요한 헤더(`MemoryPool.h`)는 **ServerCore 내부 전용**으로 두고 필요한 `.cpp`에서만 include한다 (테스트 파일도 직접 include) |
+| 메모리 블록 규칙 | 모든 할당기는 **16바이트 정렬**을 준다 (x64 malloc, StompAllocator, SLIST). MSVC의 `alignof(std::max_align_t)`는 8이므로 기준으로 쓰지 않는다. `MemoryHeader::allocSize_`는 **헤더 포함 블록 크기**, 풀 안에서는 0 (이중 해제 검사) |
 
 ## 반드시 지킬 규칙
 1. **스레드 경계**: 엔진 객체(Actor, Level)는 엔진 메인 스레드에서만 수정한다. Room 상태는 Room JobQueue 안에서만 수정한다.
@@ -116,3 +120,15 @@ Docs/Study/         학습 정리 문서 (Notion 가져오기용 Markdown, Phase
    - VS 개인 설정(`*.user`, `.slnLaunch.user`의 여러 시작 프로젝트 등)도 PC마다 다시 설정한다.
    - 전체 절차는 `Setup.md`에 있다. git에 안 올라가는 항목이 새로 생기면 Setup.md에 추가한다.
 5. 여러 PC에서 작업하므로, 작업을 시작할 때 `git pull`, 마칠 때 `push`를 안내한다. 새로 정해진 설계 결정은 이 파일에, 진행 상황은 Plan.md에 반영한다.
+
+## Claude 작업 메모 (빌드 확인, 리뷰 습관)
+- **서버 빌드·실행 확인** (Bash, Git Bash 기준). 리뷰나 테스트 작성 뒤에는 Debug/Release를 모두 빌드하고 실행해서 경고와 OK/FAIL을 확인한다.
+  ```bash
+  cd /c/Project/OogieEngine-Multi/Server
+  MSB=$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -find "MSBuild/**/Bin/MSBuild.exe" | head -1)
+  for c in Debug Release; do "$MSB" Server.sln -p:Configuration=$c -p:Platform=x64 -m -v:minimal -nologo 2>&1 | grep -E "error|warning" | sort -u; ./Binary/$c/GameServer.exe; done
+  ```
+  `main`에 크래시 테스트 주석이 풀려 있으면 실행이 크래시로 끝난다 → 결과를 보고할 때 구분한다.
+- **리뷰 체크리스트**: VS 저장 여부(디스크 내용이 옛것이면 `Ctrl+Shift+S` 안내), 들여쓰기 탭(붙여넣기 시 스페이스가 자주 섞임), 파일 끝 줄바꿈, 새 파일의 `.vcxproj`/`.filters` 등록, 헤더 주석의 약속과 코드 일치, C 스타일 캐스팅, `size_t` → `int32` 축소 변환 경고.
+- **크기·정렬 값은 추측으로 단정하지 않는다.** `sizeof`, `alignof`, 오프셋은 테스트 출력이나 `STATIC_ASSERT`로 확인한 뒤 설명한다 (`max_align_t`를 16으로, `sizeof(MemoryHeader)`를 32로 잘못 설명한 적 있음).
+- Claude가 파일을 고친 뒤에는 VS에서 다시 불러오라고 안내한다 (VS가 옛 버퍼로 덮어쓴 적 있음).

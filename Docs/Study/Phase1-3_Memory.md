@@ -7,7 +7,7 @@
 | 1 | `Allocator.h/.cpp`, `Memory.h` | BaseAllocator + xnew / xdelete (placement new) | ✅ |
 | 2 | `Allocator.h/.cpp`, `Memory.h` | StompAllocator (VirtualAlloc, 해제 후 접근 즉시 크래시) + Debug 전용 `DefaultAllocator` | ✅ |
 | 3-1 | `MemoryPool.h` | MemoryHeader (블록 앞 크기 머리말 + SLIST 노드) | ✅ |
-| 3-2 | `MemoryPool.h/.cpp` | MemoryPool (SLIST Push/Pop) | ⏳ |
+| 3-2 | `MemoryPool.h/.cpp` | MemoryPool (SLIST lock-free Push/Pop, 사용/예약 카운트) | ✅ |
 
 ---
 
@@ -454,3 +454,283 @@ STATIC_ASSERT(sizeof(MemoryHeader) % SLIST_ALIGNMENT == 0, "MemoryHeader size mu
 **Q2. `return header + 1;`을 `return reinterpret_cast<int8*>(header) + 1;`로 바꾸면?**
 > ✅ 내 답: header는 헤더 크기 단위로 포인터 연산을 해야 하는데 `int8*`로 바꾸면 의도와 다르게 1바이트만 이동한다.
 > 💬 보충: 블록 1000이면 1001을 준다 → ① 데이터가 헤더(`Next`, `allocSize_`)를 덮음 ② 16바이트 정렬 깨짐 ③ `DetachHeader(1001)`은 −16바이트로 985를 돌려줘 블록 시작과 어긋남 → 잘못된 주소로 해제.
+
+---
+
+## Step 3-2. MemoryPool
+
+### 🎯 목표
+**같은 크기의 블록**을 모아 두고, 여러 스레드가 락 없이 꺼내 쓰고(Pop) 돌려놓는(Push) lock-free 풀을 만든다.
+
+### 📖 개념 1 — 왜 풀을 쓰나
+| | 매번 `malloc`/`free` | 메모리 풀 |
+|---|---|---|
+| 해제 | 힙에 반납 | **풀에 보관** |
+| 다음 할당 | 힙에서 빈 공간 탐색 | 풀 맨 앞 블록을 바로 꺼냄 |
+| 멀티스레드 | 힙 내부 락 경쟁 | SLIST 원자 연산 한 번 |
+
+- 게임 서버는 패킷, Job, 세션처럼 같은 크기의 객체를 초당 수만 번 만들고 지운다.
+- LIFO라서 방금 반납된 블록이 바로 다시 나간다 → CPU 캐시에 남아 있을 가능성이 높다.
+- 풀의 블록 크기(`allocSize_`)는 **헤더를 포함한 전체 크기**다 (데이터 64B → 블록 16 + 64 = 80B).
+
+### 📖 개념 2 — SLIST_ENTRY (블록 안의 "손")
+```cpp
+// winnt.h (x64)
+typedef struct DECLSPEC_ALIGN(16) _SLIST_ENTRY {
+    struct _SLIST_ENTRY *Next;      // 다음 노드 주소 (8B) + 정렬 빈칸 8B = 16B
+} SLIST_ENTRY, *PSLIST_ENTRY;
+```
+- 데이터 칸이 없다. 데이터는 이 노드를 **품은 쪽**(MemoryHeader)이 갖는다 → 침투형(intrusive) 리스트.
+- MSVC가 빈칸 8B에 `allocSize_`(4B)를 넣어서 `sizeof(MemoryHeader)`가 16이 된다.
+
+| | 보통 리스트 (`std::list`) | 침투형 리스트 (SLIST) |
+|---|---|---|
+| 넣을 때 할당 | 노드마다 할당 | **없음** (블록 자신이 노드) |
+| 메모리 풀에 쓰면 | 할당을 줄이려다 또 할당 (모순) | 빈 블록 자체를 엮음 ✅ |
+
+- **상속하는 이유**: `SLIST_ENTRY` 부분이 오프셋 0에 놓여 `MemoryHeader*`와 `PSLIST_ENTRY`가 같은 주소가 된다 → 자식 → 부모는 암시적 변환, 부모 → 자식은 `static_cast`.
+
+### 📖 개념 3 — SLIST_HEADER (줄 입구의 "명부")
+| | `SLIST_ENTRY` | `SLIST_HEADER` |
+|---|---|---|
+| 어디 있나 | 블록마다 하나 (MemoryHeader 안) | 풀마다 하나 (`MemoryPool::header_`) |
+| 역할 | "내 다음 블록은 저기" | "줄의 맨 앞은 저기" |
+
+| 칸 (x64) | 크기 | 내용 |
+|---|---|---|
+| `NextEntry` | 60비트 | 맨 앞 블록 주소 (16바이트 정렬이라 끝 4비트는 항상 0 → 생략) |
+| `Depth` | 16비트 | 들어 있는 블록 수 |
+| `Sequence` | 48비트 | Push/Pop마다 +1 되는 순번 |
+| `Reserved` | 4비트 | 예약 |
+
+```
+                 NextEntry   Depth   Sequence
+처음 (Init)        nullptr     0        0
+Push(A)            A           1        1
+Push(B)            B           2        2
+Pop() → B          A           1        3
+```
+- Push/Pop은 이 **16바이트 전체를 한 번에** 비교교환(`cmpxchg16b`)한다 → 세 칸이 따로 바뀌는 순간이 없다.
+- `cmpxchg16b`는 16바이트 정렬된 주소만 받는다 → `SLIST_HEADER`와 노드 모두 16바이트 정렬 **필수**.
+
+> ⚠️ 반드시 `InitializeSListHead`로 초기화하고, 칸을 직접 읽고 쓰지 않으며(`Interlocked...` 함수만), 복사하지 않는다.
+
+### 📖 개념 4 — ABA 문제와 Sequence
+| 시점 | 일어난 일 | NextEntry | Sequence |
+|---|---|---|---|
+| ① | 스레드 A가 읽음: "맨 앞 X, X의 다음 Y" (멈춤) | X | 10 |
+| ② | 스레드 B가 X를 Pop | Y | 11 |
+| ③ | 스레드 B가 Y를 Pop (Y 사용 중) | … | 12 |
+| ④ | 스레드 B가 X를 다시 Push | X | 13 |
+| ⑤ | 스레드 A가 깨어나 비교: "(X, 10)인가?" | X | **13** |
+
+- **주소만 비교**: 맨 앞이 여전히 X → 성공 → 맨 앞 = Y인데 Y는 B가 쓰는 중 💥
+- **주소 + 순번 비교**: 10 ≠ 13 → 실패 → A가 다시 읽는다 ✅
+- 주소가 A → B → A로 돌아와 변화를 못 알아채는 문제를 **ABA**라고 한다.
+
+| 함수 | 하는 일 | 반환 |
+|---|---|---|
+| `InitializeSListHead(&head)` | 빈 리스트로 초기화 | 없음 |
+| `InterlockedPushEntrySList(&head, entry)` | 맨 앞에 넣기 | 넣기 전 맨 앞 노드 |
+| `InterlockedPopEntrySList(&head)` | 맨 앞에서 빼기 | 뺀 노드, 비었으면 `nullptr` |
+| `InterlockedFlushSList(&head)` | 전부 떼어 냄 | 떼어 낸 리스트의 첫 노드 |
+| `QueryDepthSList(&head)` | 개수 조회 | Depth |
+
+### 📖 개념 5 — 구조 그림: MemoryHeader와 MemoryPool
+```
+┌──────────────── MemoryPool (풀 하나 = 블록 크기 하나, 예: 80B) ────────────────┐
+│                                                                              │
+│  header_ : SLIST_HEADER (16B, 풀의 입구 명부)                                  │
+│  ┌──────────────────────────────────────────┐                                │
+│  │ NextEntry = B │ Depth = 3 │ Sequence = 37 │                                │
+│  └───────┬──────────────────────────────────┘                                │
+│          │ 맨 앞                                                              │
+│          ▼                                                                    │
+│   ┌─ 블록 B (80B) ─┐     ┌─ 블록 A (80B) ─┐     ┌─ 블록 D (80B) ─┐            │
+│   │ MemoryHeader   │     │ MemoryHeader   │     │ MemoryHeader   │            │
+│   │  Next ─────────┼───▶ │  Next ─────────┼───▶ │  Next = nullptr│            │
+│   │  allocSize_= 0 │     │  allocSize_= 0 │     │  allocSize_= 0 │            │
+│   ├────────────────┤     ├────────────────┤     ├────────────────┤            │
+│   │ 데이터 64B 빈칸 │     │ 데이터 64B 빈칸 │     │ 데이터 64B 빈칸 │            │
+│   └────────────────┘     └────────────────┘     └────────────────┘            │
+│        ↑ 풀 안에서 쉬는 블록들 (reserveCount_ = 3)                              │
+│                                                                              │
+│  allocSize_ = 80   useCount_ = 1   reserveCount_ = 3                          │
+└──────────────────────────────────────────────────────────────────────────────┘
+
+   밖에서 사용 중인 블록 (useCount_ = 1) — 풀은 이 블록을 가리키지 않는다
+   ┌─ 블록 C (80B) ─┐
+   │ MemoryHeader   │
+   │  Next (안 씀)   │
+   │  allocSize_=80 │ ← 이름표: "나는 80B 풀 소속"
+   ├────────────────┤
+   │ Knight 객체 ... │ ← 사용자는 여기 주소만 안다
+   └────────────────┘
+```
+
+| 구성 요소 | 개수 | 역할 |
+|---|---|---|
+| `MemoryPool` | 블록 크기마다 1개 | 같은 크기 블록들의 보관소 |
+| `SLIST_HEADER` (`header_`) | 풀마다 1개 | 쉬는 블록 줄의 입구 |
+| `MemoryHeader` | 블록마다 1개 | 블록 맨 앞 16B. 쉴 때는 `Next`로 줄 서기, 쓸 때는 `allocSize_`로 이름표 |
+
+### 📖 개념 6 — 한 블록의 일생
+```
+            MemoryPool                         사용하는 쪽 (이후 Memory / xnew)
+   ┌───────────────────────────┐
+   │ ① Pop()                   │
+   │   풀에 있으면 맨 앞을 뗌     │
+   │   없으면 _aligned_malloc   │
+   └─────────────┬─────────────┘
+                 │ MemoryHeader* (이름표 없음)
+                 ▼
+                                      ② AttachHeader(block, 80)
+                                         allocSize_ = 80 기록
+                                         반환: block + 1 (데이터 주소)
+                                                  │
+                                                  ▼
+                                      ③ 사용 (생성자 → 게임 로직 → 소멸자)
+                                                  │
+                                                  ▼
+                                      ④ DetachHeader(데이터 주소)
+                                         데이터 주소 - 1 → 블록 시작
+                                         allocSize_ = 80 읽기 → "80B 풀로"
+                 ┌────────────────────────────────┘
+                 ▼ MemoryHeader*
+   ┌───────────────────────────┐
+   │ ⑤ Push(header)            │
+   │   allocSize_ > 0 확인      │ ← 0이면 이중 해제 → 크래시
+   │   allocSize_ = 0          │ ← "풀 안에 있음" 표시
+   │   줄 맨 앞에 끼움           │
+   └─────────────┬─────────────┘
+                 │
+                 └──▶ 다음 ① Pop에서 다시 나감 (재사용)
+```
+
+**MemoryHeader의 두 얼굴** — 같은 16B 칸이 상태에 따라 다르게 쓰인다.
+```
+           풀 안에서 쉬는 중                       밖에서 사용 중
+   ┌──────────────────────────┐        ┌──────────────────────────┐
+   │ Next = 다음 빈 블록 주소   │ ◀─쓰임  │ Next = (의미 없음)         │
+   │ allocSize_ = 0           │         │ allocSize_ = 80          │ ◀─쓰임
+   └──────────────────────────┘        └──────────────────────────┘
+      MemoryPool이 관리                   사용하는 쪽이 관리
+      (SLIST의 노드)                      (해제할 때 풀을 찾는 이름표)
+```
+
+### 📖 개념 7 — 다음 단계와의 연결 (미리 보기)
+```
+xnew<Knight>()                          xdelete(knight)
+     │                                        │
+     ▼                                        ▼
+Memory::Allocate(크기)                   Memory::Release(ptr)
+     │ 크기에 맞는 풀 선택                     │ DetachHeader → allocSize_로 풀 선택
+     ▼                                        ▼
+┌──────────┬──────────┬──────────┬─── … ───┐
+│ 32B 풀   │ 64B 풀   │ 80B 풀   │ 4096B 풀 │   ← MemoryPool 여러 개
+└──────────┴──────────┴──────────┴─── … ───┘
+```
+
+### 🧱 핵심 코드
+```cpp
+// MemoryPool.h
+class alignas(SLIST_ALIGNMENT) MemoryPool
+{
+public:
+	explicit MemoryPool(int32 allocSize);	// allocSize: 블록 전체 크기 (MemoryHeader 포함)
+	~MemoryPool();
+
+	void Push(MemoryHeader* ptr);			// AttachHeader로 헤더를 붙인 블록만 받는다
+	MemoryHeader* Pop();					// 헤더가 붙지 않은 블록을 돌려준다
+
+	int32 GetAllocSize() const { return allocSize_; }
+	int32 GetUseCount() const { return useCount_.load(); }
+	int32 GetReserveCount() const { return reserveCount_.load(); }
+
+private:
+	SLIST_HEADER header_;
+	int32 allocSize_ = 0;
+	Atomic<int32> useCount_ = 0;			// 밖에서 사용 중
+	Atomic<int32> reserveCount_ = 0;		// 풀 안에서 쉬는 중
+};
+```
+```cpp
+// MemoryPool.cpp
+MemoryPool::MemoryPool(int32 allocSize) : allocSize_(allocSize)
+{
+	ASSERT_CRASH(allocSize >= static_cast<int32>(sizeof(MemoryHeader)));
+	::InitializeSListHead(&header_);
+}
+
+MemoryPool::~MemoryPool()
+{
+	// 풀 안의 블록만 해제 (사용 중인 블록은 풀이 모른다)
+	while (MemoryHeader* memory = static_cast<MemoryHeader*>(::InterlockedPopEntrySList(&header_)))
+		::_aligned_free(memory);
+}
+
+void MemoryPool::Push(MemoryHeader* ptr)
+{
+	ASSERT_CRASH(ptr->allocSize_ > 0);		// 0이면 이중 해제
+	ptr->allocSize_ = 0;					// "풀 안에 있음" 표시
+
+	::InterlockedPushEntrySList(&header_, static_cast<PSLIST_ENTRY>(ptr));
+
+	useCount_.fetch_sub(1);
+	reserveCount_.fetch_add(1);
+}
+
+MemoryHeader* MemoryPool::Pop()
+{
+	MemoryHeader* memory = static_cast<MemoryHeader*>(::InterlockedPopEntrySList(&header_));
+
+	if (memory == nullptr)
+	{
+		memory = static_cast<MemoryHeader*>(::_aligned_malloc(allocSize_, SLIST_ALIGNMENT));
+		ASSERT_CRASH(memory != nullptr);
+	}
+	else
+	{
+		ASSERT_CRASH(memory->allocSize_ == 0);
+		reserveCount_.fetch_sub(1);
+	}
+
+	useCount_.fetch_add(1);
+	return memory;
+}
+```
+
+> 💡 `_aligned_malloc`으로 받은 메모리는 반드시 `_aligned_free`로 해제한다 (할당/해제 짝 맞추기).
+
+### 🔧 강의와 다른 점
+| 변경 | 이유 |
+|---|---|
+| `Push`에서 `ASSERT_CRASH(allocSize_ > 0)` | 같은 블록을 두 번 Push(이중 해제)하면 SLIST에 같은 노드가 두 번 들어가 리스트가 고리가 되고, 나중에 두 곳에서 같은 블록을 쓴다 → 그 자리에서 잡는다 |
+| `_aligned_malloc` 결과 nullptr 검사 | nullptr 위에 헤더를 쓰는 UB 방지 |
+| 생성자에서 블록 크기 하한 검사 | 헤더보다 작은 블록이면 헤더가 블록 밖을 덮는다 |
+| `GetUseCount()` 등 조회 함수 | 테스트, 이후 통계 출력 |
+| `DECLSPEC_ALIGN` → `alignas`, 멤버 이름 뒤 `_` | Step 3-1과 같은 이유 |
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| `.cpp`를 붙여넣어 스페이스 들여쓰기 (세 번째) | 파일 안에서 탭/스페이스 불일치 | VS `도구 → 옵션 → 텍스트 편집기 → C/C++ → 탭`에서 **탭 유지** 설정 |
+| VS에서 고치고 저장 안 함 | 디스크에는 반영 안 됨 (크래시 테스트 주석도 풀린 채) | 리뷰 요청 전에 `Ctrl+Shift+S` 모두 저장. 탭 제목의 `*` 확인 |
+| (Claude) 테스트 주석과 출력에 확인 질문 2번의 답을 넣음 | 질문의 힌트가 됨 | 판정 근거 주석은 필요하지만, 확인 질문과 겹치면 미리 알린다 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `MemoryPoolReuse` | Pop(새 할당, 16바이트 정렬, use 1 / reserve 0) → Push(use 0 / reserve 1) → 다시 Pop이 **같은 블록**인지(LIFO 재사용) → Push | `OK` (Debug/Release) |
+| `MemoryPoolConcurrent` | 스레드 4개 × 10,000번 Pop → Attach → **스레드마다 다른 값**으로 64B 쓰고 다시 읽기 → Push. Join 후 use 0, reserve 1~4, 값이 섞인 횟수 0 | `OK (blocks created 4)` (Debug/Release, 각 3회) |
+| `CrashMemoryPoolDoublePush` | 같은 블록을 두 번 Push | `ASSERT_CRASH(ptr->allocSize_ > 0)` 크래시 (Debug/Release) |
+
+> 📝 2026-10-28: 정상 테스트 통과, 크래시 테스트 직접 확인. 테스트 코드는 사용자 요청으로 Claude가 작성했다.
+
+### 🧩 복습 질문
+**Q1. `Push`는 블록을 해제하지 않고 쌓기만 한다. 풀의 메모리는 언제 줄어들까? 단점은?**
+> ✅ 내 답: 줄어들지 않는다. 메모리 낭비가 생길 수 있다.
+> 💬 보충: `_aligned_free`는 소멸자에만 있으므로 풀이 사라질 때(서버 종료)만 반납된다. **최고점(동시에 쓴 최대 개수) 기준으로 유지**되어, 이벤트 피크 후에도 메모리가 내려가지 않는다. 64B 풀의 블록은 128B 요청에 쓸 수 없고, 누수와 구분이 어려워 `useCount`/`reserveCount`가 근거가 된다. 그래도 피크는 매일 다시 오고 예측 가능하므로 게임 서버는 이 방식을 많이 쓴다. 줄이려면 reserve 상한이나 trim을 둔다.
+
+**Q2. `MemoryPoolConcurrent`가 끝난 뒤 reserve가 최대 4인 이유는?**
+> 💬 (모르겠다 → 해설) 새 블록은 **풀이 비었을 때만** 만들어진다. 각 스레드는 Pop → 사용 → Push라 동시에 1개만 들고 있으므로, 밖에 나가 있는 블록은 최대 4개다. 5번째를 만들려면 4개가 밖에 있는 상태에서 또 Pop해야 하는데 그럴 스레드가 없다. 반복이 많아 4개가 동시에 나가는 순간이 거의 확실히 생겨 매번 4가 나왔지만, 스레드가 겹치지 않으면 1~3도 가능해서 판정은 1~4로 한다. → **풀의 크기 = 동시 사용 최대 개수**.
