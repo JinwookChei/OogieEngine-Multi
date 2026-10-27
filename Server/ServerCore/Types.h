@@ -22,6 +22,10 @@ using uint32 = std::uint32_t;
 using uint64 = std::uint64_t;
 // 타입 크기 검증은 Types.cpp에서 한다.
 
+/*
+	[포인터 타입]
+*/
+using uintptr = std::uintptr_t;
 
 /*
 	[동기화 타입]

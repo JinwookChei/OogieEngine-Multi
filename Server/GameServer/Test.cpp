@@ -328,4 +328,84 @@ void XnewXdelete()
 	std::cout << "[XnewXdelete] OK" << std::endl;
 }
 
+void StompAllocFree()
+{
+	// StompAllocator의 PAGE_SIZE, ALIGNMENT는 private이라 테스트에서 같은 값을 따로 둔다
+	constexpr uintptr PAGE = 4096;
+	constexpr uintptr ALIGN = 16;
+
+	// 8: 1페이지 안의 작은 객체 / 4096: 딱 1페이지 (앞쪽 빈 공간 0) / 5000: 2페이지에 걸침
+	const int32 sizes[] = { 8, 4096, 5000 };
+
+	for (int32 size : sizes)
+	{
+		void* ptr = StompAllocator::Alloc(size);
+		const uintptr address = reinterpret_cast<uintptr>(ptr);
+		const uintptr alignedSize = (static_cast<uintptr>(size) + ALIGN - 1) / ALIGN * ALIGN;
+
+		// 1) 정렬: 반환 주소가 16의 배수
+		const bool aligned = (address % ALIGN == 0);
+
+		// 2) 페이지 끝에 붙었는지: 데이터 끝(올림한 크기 기준)이 페이지 경계와 일치
+		const bool atPageEnd = ((address + alignedSize) % PAGE == 0);
+
+		// 3) 받은 메모리 전체를 쓰고 다시 읽는다 (커밋이 안 된 바이트가 있으면 여기서 크래시)
+		int8* bytes = static_cast<int8*>(ptr);
+		for (int32 i = 0; i < size; ++i)
+			bytes[i] = static_cast<int8>(i);
+
+		bool dataOk = true;
+		for (int32 i = 0; i < size; ++i)
+		{
+			if (bytes[i] != static_cast<int8>(i))
+				dataOk = false;
+		}
+
+		// 4) 해제: VirtualFree가 실패하면 Release 안의 ASSERT_CRASH에서 멈춘다
+		StompAllocator::Release(ptr);
+
+		if (aligned == false || atPageEnd == false || dataOk == false)
+		{
+			std::cout << "[StompAllocFree] FAIL : size " << size << " (address 0x" << std::hex << address << std::dec
+				<< ", aligned " << aligned << ", atPageEnd " << atPageEnd << ", dataOk " << dataOk << ")" << std::endl;
+			return;
+		}
+	}
+
+	// 5) nullptr 해제: 아무 일도 하지 않아야 한다 (free(nullptr)과 같은 규칙)
+	StompAllocator::Release(nullptr);
+
+	std::cout << "[StompAllocFree] OK" << std::endl;
+}
+
+
+/*
+	[크래시 테스트] 한 번에 하나만 호출한다
+*/
+void CrashStompUseAfterFree()
+{
+	MemoryTestKnight* knight = xnew<MemoryTestKnight>(100, 10);
+	xdelete(knight);
+
+	// 해제된 객체에 쓴다 → Debug(StompAllocator): 페이지가 OS에 반납되어 이 줄에서 Access Violation
+	knight->hp_ = 50;
+
+	std::cout << "[CrashStompUseAfterFree] FAIL : 크래시가 나지 않았다 (Release는 BaseAllocator라 정상)" << std::endl;
+}
+
+void CrashStompOverflow()
+{
+	// 데이터 끝이 정확히 페이지 끝에 오는 크기를 쓴다
+	constexpr int32 SIZE = 16;
+
+	// xnew를 거치지 않고 StompAllocator를 직접 쓰므로 Release 빌드에서도 크래시가 나야 한다
+	int8* bytes = static_cast<int8*>(StompAllocator::Alloc(SIZE));
+
+	bytes[SIZE - 1] = 1;   // 마지막 바이트: 정상
+	bytes[SIZE] = 1;       // 한 바이트 넘어감 → 할당되지 않은 주소 → 이 줄에서 Access Violation
+
+	std::cout << "[CrashStompOverflow] FAIL : 크래시가 나지 않았다" << std::endl;
+	StompAllocator::Release(bytes);
+}
+
 

@@ -15,21 +15,20 @@ int main(int argc, char* argv[])
 	// ThreadRace();
 	// WriteLockCounter();
 
-	// LockReentrancy();
-	// LockContention();
-	// NoCycleLock();
-	// XnewXdelete();
+	LockReentrancy();
+	LockContention();
+	NoCycleLock();
+
+	XnewXdelete();
+	StompAllocFree();
 
 	// 크래시 테스트: 하나씩 주석을 풀고 실행 → 크래시 확인 후 다시 주석 처리
 	// CrashInvalidUnlockOrder();
 	// CrashUnknownLock();
 	// CrashThreadIdZero();
 	// CrashDeadLockCycle();
-
-
-	Atomic<int32> a = 0;
-	a.fetch_add(1);
-	a.fetch_add(2);
+	// CrashStompUseAfterFree();
+	// CrashStompOverflow();
 
 	std::cout << "GameServer End" << std::endl;
 }

@@ -1,7 +1,5 @@
 ﻿#pragma once
-#include <cstddef>
 #include "Types.h"
-
 
 /*
 		[BaseAllocator]
@@ -14,7 +12,6 @@ public:
 	static void* Alloc(int32 size);
 	static void Release(void* ptr);
 };
-
 
 /*
 		[StompAllocator]
@@ -98,8 +95,10 @@ public:
 		왜 정렬 올림을 하나
 		  올림 없이 size = 4를 그대로 끝에 붙이면 반환 주소가 0x...0FFC가 된다.
 		  - 16바이트 정렬을 기대하는 타입(SSE 벡터 __m128 등)은 정렬되지 않은 주소에서 성능이 떨어지거나 크래시가 난다.
-		  - xnew는 "malloc과 같은 정렬(16)을 보장한다"는 전제로 STATIC_ASSERT를 걸어 두었다.
-		    그러니 할당기를 바꿔도 이 약속을 지켜야 한다.
+		  - x64 Windows의 malloc은 16바이트 정렬을 준다. xnew는 할당기를 바꿔 끼우는 구조이므로
+		    어떤 할당기를 쓰든 이 정렬을 똑같이 지켜야 한다.
+		  - [주의] MSVC의 alignof(std::max_align_t)는 16이 아니라 8이다 (double 기준).
+		    malloc의 실제 정렬과 다르므로 ALIGNMENT를 max_align_t로 정하면 8바이트 정렬이 되어 버린다.
 		  - 대가: 여분 바이트(최대 15B) 안의 오버플로는 잡지 못한다. 정확성(정렬)을 탐지 범위보다 우선한 선택이다.
 
 		------------------------------------------------------------------------
@@ -116,7 +115,7 @@ public:
 		  A (size 8)      0x...0FF0    0xFF0       0x...0000 (OK)
 		  B (size 5000)   0x...0C70    0xC70       0x...0000 (OK)
 
-		- 주소를 정수로 바꿔 계산해야 하므로 std::uintptr_t를 쓴다 (포인터 크기와 같은 부호 없는 정수).
+		- 주소를 정수로 바꿔 계산해야 하므로 uintptr(std::uintptr_t)를 쓴다 (포인터 크기와 같은 부호 없는 정수).
 		- VirtualFree(base, 0, MEM_RELEASE): MEM_RELEASE는 "예약했던 영역 전체를 반납"이라는 뜻이다.
 		  범위는 OS가 기억하고 있으므로 size는 반드시 0이어야 한다. 0이 아니면 실패한다.
 
@@ -165,7 +164,7 @@ public:
 class StompAllocator
 {
 public:
-	// size는 1 이상. 실패하면 nullptr
+	// size는 1 이상. 실패하면 크래시.
 	static void* Alloc(int32 size);
 
 	// Alloc이 돌려준 주소만 받는다. nullptr이면 아무 일도 하지 않는다
@@ -174,8 +173,8 @@ public:
 private:
 	// VirtualAlloc의 할당 단위 (x64 Windows 페이지 크기)
 	// 0x1000 = 4KB(4096바이트) - Page 사이즈.
-	static constexpr std::size_t PAGE_SIZE = 0x1000;
+	static constexpr int32 PAGE_SIZE = 0x1000;
 
-	// 반환 주소의 정렬. xnew의 STATIC_ASSERT(alignof(Type) <= alignof(max_align_t))와 같은 기준이다
-	static constexpr std::size_t ALIGNMENT = alignof(std::max_align_t);
+	// 반환 주소의 정렬. x64 Windows malloc과 같은 16바이트 (MEMORY_ALLOCATION_ALIGNMENT, 이후 SLIST도 16을 요구)
+	static constexpr int32 ALIGNMENT = 16;
 };

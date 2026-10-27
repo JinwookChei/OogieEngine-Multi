@@ -15,6 +15,7 @@ void NoCycleLock();         // ◇ 모양(X → Y, X → Z, Z → Y) + 분리된
 	[Memory 테스트]
 */
 void XnewXdelete();         // 생성자 인자 전달, 소멸자 호출, nullptr 해제
+void StompAllocFree();      // StompAllocator 직접 호출: 정렬, 페이지 끝 배치, 읽기/쓰기, nullptr 해제 (크기 8 / 4096 / 5000)
 
 /*
 	크래시 테스트: 호출하면 반드시 크래시가 나야 정상이다. 한 번에 하나만 호출한다.
@@ -24,3 +25,7 @@ void CrashInvalidUnlockOrder();   // A → B 순서로 잡고 A를 먼저 해제
 void CrashUnknownLock();          // 등록된 적 없는 이름으로 해제 → UNKNOWN_LOCK
 void CrashThreadIdZero();         // InitTLS를 거치지 않은 스레드(LThreadId == 0)가 락 요청 → ASSERT_CRASH
 void CrashDeadLockCycle();        // 스레드 1: P → Q, 스레드 2: Q → R → P (시간 겹침 없음) → DEADLOCK_DETECTED
+
+// Memory 크래시 테스트 (Access Violation 0xC0000005가 나야 정상)
+void CrashStompUseAfterFree();    // xdelete 후 멤버에 쓰기 → Debug만 크래시 (Release는 BaseAllocator)
+void CrashStompOverflow();        // StompAllocator로 16바이트 받고 [16]에 쓰기 → Debug/Release 모두 크래시
