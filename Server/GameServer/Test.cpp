@@ -451,3 +451,110 @@ void MemoryHeaderAttachDetach()
 
 	std::cout << "[MemoryHeaderAttachDetach] OK (sizeof(MemoryHeader) = " << headerSize << ")" << std::endl;
 }
+
+/*
+	[Memory 테스트] MemoryPool
+*/
+void MemoryPoolReuse()
+{
+	constexpr int32 DATA_SIZE = 64;
+	const int32 blockSize = static_cast<int32>(sizeof(MemoryHeader)) + DATA_SIZE;
+
+	MemoryPool pool(blockSize);
+
+	// 1) 처음 Pop: 풀이 비어 있으므로 새로 할당된다
+	MemoryHeader* first = pool.Pop();
+	void* data = MemoryHeader::AttachHeader(first, blockSize);
+	const bool aligned = (reinterpret_cast<uintptr>(first) % SLIST_ALIGNMENT == 0);
+	const bool countAfterPop = (pool.GetUseCount() == 1 && pool.GetReserveCount() == 0);
+
+	// 2) Push: 해제하지 않고 풀에 보관된다
+	pool.Push(MemoryHeader::DetachHeader(data));
+	const bool countAfterPush = (pool.GetUseCount() == 0 && pool.GetReserveCount() == 1);
+
+	// 3) 다시 Pop: 방금 넣은 블록이 그대로 다시 나와야 한다 (LIFO 재사용)
+	MemoryHeader* second = pool.Pop();
+	const bool reused = (second == first);
+	const bool countAfterReuse = (pool.GetUseCount() == 1 && pool.GetReserveCount() == 0);
+
+	// 4) 다시 돌려놓는다. 풀 소멸자가 풀 안의 블록을 해제한다
+	MemoryHeader::AttachHeader(second, blockSize);
+	pool.Push(second);
+
+	if (aligned == false || countAfterPop == false || countAfterPush == false || reused == false || countAfterReuse == false)
+	{
+		std::cout << "[MemoryPoolReuse] FAIL : aligned " << aligned << ", countAfterPop " << countAfterPop
+			<< ", countAfterPush " << countAfterPush << ", reused " << reused << ", countAfterReuse " << countAfterReuse << std::endl;
+		return;
+	}
+
+	std::cout << "[MemoryPoolReuse] OK" << std::endl;
+}
+
+void MemoryPoolConcurrent()
+{
+	constexpr int32 THREAD_COUNT = 4;
+	constexpr int32 REPEAT_COUNT = 10'000;
+	constexpr int32 DATA_SIZE = 64;
+	const int32 blockSize = static_cast<int32>(sizeof(MemoryHeader)) + DATA_SIZE;
+
+	MemoryPool pool(blockSize);
+	Atomic<int32> badDataCount{ 0 };
+
+	for (int32 t = 0; t < THREAD_COUNT; ++t)
+	{
+		GThreadManager->Launch([&pool, &badDataCount, t]()
+			{
+				// 스레드마다 다른 값으로 채운다. 두 스레드가 같은 블록을 동시에 받으면 값이 섞인다
+				const int8 mark = static_cast<int8>(t + 1);
+
+				for (int32 i = 0; i < REPEAT_COUNT; ++i)
+				{
+					MemoryHeader* block = pool.Pop();
+					int8* bytes = static_cast<int8*>(MemoryHeader::AttachHeader(block, blockSize));
+
+					for (int32 j = 0; j < DATA_SIZE; ++j)
+						bytes[j] = mark;
+					for (int32 j = 0; j < DATA_SIZE; ++j)
+					{
+						if (bytes[j] != mark)
+						{
+							badDataCount.fetch_add(1);
+							break;
+						}
+					}
+
+					pool.Push(MemoryHeader::DetachHeader(bytes));
+				}
+			});
+	}
+	GThreadManager->Join();
+
+	// 동시에 밖에 나가 있을 수 있는 블록은 스레드 수만큼이다 → 만들어진 블록 수(= 끝난 뒤 reserve)도 1 ~ THREAD_COUNT
+	const int32 useCount = pool.GetUseCount();
+	const int32 reserveCount = pool.GetReserveCount();
+
+	if (useCount != 0 || reserveCount < 1 || reserveCount > THREAD_COUNT || badDataCount.load() != 0)
+	{
+		std::cout << "[MemoryPoolConcurrent] FAIL : use " << useCount << " (expected 0), reserve " << reserveCount
+			<< " (expected 1 ~ " << THREAD_COUNT << "), bad data " << badDataCount.load() << " (expected 0)" << std::endl;
+		return;
+	}
+
+	std::cout << "[MemoryPoolConcurrent] OK (blocks created " << reserveCount << ")" << std::endl;
+}
+
+void CrashMemoryPoolDoublePush()
+{
+	const int32 blockSize = static_cast<int32>(sizeof(MemoryHeader)) + 64;
+	MemoryPool pool(blockSize);
+
+	MemoryHeader* block = pool.Pop();
+	void* data = MemoryHeader::AttachHeader(block, blockSize);
+	pool.Push(MemoryHeader::DetachHeader(data));
+
+	// 이미 풀에 있는 블록(allocSize_ == 0)을 또 넣는다 → Push의 ASSERT_CRASH(ptr->allocSize_ > 0)
+	pool.Push(block);
+
+	std::cout << "[CrashMemoryPoolDoublePush] FAIL : 크래시가 나지 않았다" << std::endl;
+}

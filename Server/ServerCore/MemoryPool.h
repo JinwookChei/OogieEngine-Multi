@@ -42,3 +42,35 @@ struct alignas(SLIST_ALIGNMENT) MemoryHeader : public SLIST_ENTRY
 
 // 데이터 시작 주소(header + 1)도 16바이트 정렬이 되려면 헤더 크기가 16의 배수여야 한다
 STATIC_ASSERT(sizeof(MemoryHeader) % SLIST_ALIGNMENT == 0, "MemoryHeader size must be a multiple of SLIST_ALIGNMENT");
+
+
+/*
+				[MemoryPool]
+				같은 크기(allocSize_)의 블록만 모아 두는 lock-free 풀.
+				- Pop : 풀에서 쉬는 블록을 하나 꺼낸다. 없으면 새로 할당한다
+				- Push: 다 쓴 블록을 해제하지 않고 풀에 넣어 다음 Pop에서 재사용한다
+				SLIST가 원자적으로 처리하므로 여러 스레드가 락 없이 동시에 Push/Pop 할 수 있다.
+*/
+class alignas(SLIST_ALIGNMENT) MemoryPool
+{
+public:
+	// allocSize: 블록 하나의 전체 크기 (MemoryHeader 포함)
+	explicit MemoryPool(int32 allocSize);
+	~MemoryPool();
+
+	// 사용하는 쪽에서 AttachHeader로 헤더를 붙인 블록만 받는다
+	void Push(MemoryHeader* ptr);
+
+	// 헤더가 아직 붙지 않은 블록을 돌려준다 (사용하는 쪽에서 AttachHeader)
+	MemoryHeader* Pop();
+
+	int32 GetAllocSize() const { return allocSize_; }
+	int32 GetUseCount() const { return useCount_.load(); }
+	int32 GetReserveCount() const { return reserveCount_.load(); }
+
+private:
+	SLIST_HEADER header_;              // 빈 블록 리스트의 머리 (top 주소 + 순번, 16바이트)
+	int32 allocSize_ = 0;
+	Atomic<int32> useCount_ = 0;       // 밖에서 사용 중인 블록 수
+	Atomic<int32> reserveCount_ = 0;   // 풀 안에서 쉬는 블록 수
+};
