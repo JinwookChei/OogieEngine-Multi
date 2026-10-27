@@ -6,6 +6,8 @@
 |---|---|---|---|
 | 1 | `Allocator.h/.cpp`, `Memory.h` | BaseAllocator + xnew / xdelete (placement new) | ✅ |
 | 2 | `Allocator.h/.cpp`, `Memory.h` | StompAllocator (VirtualAlloc, 해제 후 접근 즉시 크래시) + Debug 전용 `DefaultAllocator` | ✅ |
+| 3-1 | `MemoryPool.h` | MemoryHeader (블록 앞 크기 머리말 + SLIST 노드) | ✅ |
+| 3-2 | `MemoryPool.h/.cpp` | MemoryPool (SLIST Push/Pop) | ⏳ |
 
 ---
 
@@ -348,3 +350,107 @@ using DefaultAllocator = BaseAllocator;
 
 **Q11. `CrashStompOverflow`에서 크기 8을 요청하고 인덱스 8에 쓰면 크래시가 날까?**
 > (미답변)
+
+---
+
+## Step 3-1. MemoryHeader
+
+### 🎯 목표
+풀이 나눠 줄 메모리 블록의 맨 앞에 **크기 정보를 담은 머리말(header)**을 붙이고 떼는 구조체를 만든다.
+
+### 📖 개념 1 — 왜 머리말이 필요한가
+- 해제 함수는 `xdelete(ptr)`처럼 **포인터 하나만** 받는다. 그런데 풀은 크기별로 나뉘므로 "어느 풀로 돌려보낼지"를 알아야 한다.
+- 블록 앞에 크기를 적어 두고, 해제할 때 헤더 크기만큼 앞으로 가서 읽는다.
+- 💡 `free(ptr)`가 포인터 앞의 숨은 힙 헤더를 읽는 것(Step 2 Q9)과 같은 아이디어를 직접 만드는 것이다.
+
+> 💡 **비유**: 크기별 선반이 있는 그릇 대여점. 손님은 그릇만 반납하므로 그릇 바닥에 "중형" 스티커(= MemoryHeader의 `allocSize_`)를 붙여 둔다.
+
+```
+주소:  1000           1016
+        |<- 헤더 16B ->|<------ 사용자 데이터 ------>|
+        | Next | size  |                             |
+        ^ 블록 시작     ^ 사용자에게 주는 주소
+  AttachHeader: 1000 → 1016 (header + 1)
+  DetachHeader: 1016 → 1000 (ptr - 1)
+```
+
+### 📖 개념 2 — SLIST_ENTRY 상속 (침투형 연결 리스트)
+| 블록 상태 | 헤더에서 쓰는 칸 |
+|---|---|
+| 사용자가 쓰는 중 | `allocSize_` (요청 크기) |
+| 풀에서 쉬는 중 | `Next` (다음 빈 블록) → 빈 블록들이 줄줄이 연결 |
+
+- `SLIST_ENTRY`는 Windows의 **lock-free 단일 연결 리스트 노드**다 (`Next` 포인터 하나).
+- 노드를 따로 할당하지 않고 **블록 자신이 노드가 된다** (intrusive list).
+
+### 📖 개념 3 — 16바이트 정렬
+- x64 SLIST는 16바이트 원자적 비교교환(`cmpxchg16b`)을 쓰므로 **노드는 16바이트 경계**에 있어야 한다.
+- 데이터 주소(`header + 1`)도 16바이트 정렬이 되려면 **헤더 크기가 16의 배수**여야 한다 → `STATIC_ASSERT`로 검사.
+- 실제 `sizeof(MemoryHeader)`는 **16**: `Next` 8B 뒤에 정렬로 남는 공간에 `allocSize_` 4B가 들어간다.
+
+### 📖 개념 4 — 포인터 ± 1은 "타입 1개만큼"
+- `MemoryHeader* + 1` = `sizeof(MemoryHeader)`(16)바이트 뒤. Step 2의 `int8*` 규칙을 이번에는 **일부러 이용**한다.
+- `+ 1`(Attach)과 `- 1`(Detach)은 **같은 타입 기준**이어야 정확히 되돌아온다.
+
+### 🧱 핵심 코드
+```cpp
+// MemoryPool.h — ServerCore 내부 전용 (Windows.h가 바깥으로 퍼지지 않게 CorePch.h/Memory.h에서 include하지 않는다)
+constexpr int32 SLIST_ALIGNMENT = MEMORY_ALLOCATION_ALIGNMENT;
+
+struct alignas(SLIST_ALIGNMENT) MemoryHeader : public SLIST_ENTRY
+{
+	explicit MemoryHeader(int32 size) : allocSize_(size) {}
+
+	static void* AttachHeader(MemoryHeader* header, int32 size)
+	{
+		new(header) MemoryHeader(size);   // placement new
+		return header + 1;                // 헤더 1개 뒤 = 데이터 시작
+	}
+
+	static MemoryHeader* DetachHeader(void* ptr)
+	{
+		return static_cast<MemoryHeader*>(ptr) - 1;
+	}
+
+	int32 allocSize_ = 0;
+};
+
+STATIC_ASSERT(sizeof(MemoryHeader) % SLIST_ALIGNMENT == 0, "MemoryHeader size must be a multiple of SLIST_ALIGNMENT");
+```
+
+### 🔧 강의와 다른 점
+| 변경 | 이유 |
+|---|---|
+| `enum` 상수 → `constexpr int32 SLIST_ALIGNMENT = MEMORY_ALLOCATION_ALIGNMENT` | 타입이 있는 상수. 숫자 대신 OS 정의 값 사용 |
+| `DECLSPEC_ALIGN` → 표준 `alignas` | MSVC 전용 매크로 대신 C++11 표준 |
+| `++header` 후 `reinterpret_cast<void*>` → `return header + 1` | 매개변수를 바꾸지 않고 의도가 바로 읽힘. `void*` 변환은 암시적 |
+| `reinterpret_cast<MemoryHeader*>(ptr)` → `static_cast` | `void*` → `T*`는 `static_cast`로 충분. `reinterpret_cast`는 포인터 ↔ 정수에만 |
+| `STATIC_ASSERT`로 헤더 크기 검사 | 필드를 추가하다 크기가 어긋나면 컴파일 단계에서 잡음 |
+| Windows.h를 내부 헤더에만 | 강의는 pch에 있어 어디서나 보인다. 클라이언트 엔진으로 매크로(`min`/`max` 등)가 퍼지지 않게 막는다 |
+| `allocSize` → `allocSize_` | 프로젝트 멤버 네이밍 규칙 |
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| 테스트에서 쓰려고 `CorePch.h`에 `MemoryPool.h` 추가 | Windows.h가 GameServer/DummyClient/클라이언트 전부로 퍼짐 | 내부 헤더는 필요한 .cpp에서 직접 include. 테스트도 마찬가지 |
+| 파일을 폴더에만 만들고 프로젝트에 등록 안 함 (VS 프로젝트 미저장) | 솔루션 탐색기·다른 PC에서 빠짐 | 추가 후 `Ctrl+Shift+S` 모두 저장, `.vcxproj`/`.filters`도 커밋 |
+| C 스타일 캐스팅 `(int8*)data` | 어떤 캐스팅이 되든 조용히 통과 → 실수를 숨김 | `static_cast` / `reinterpret_cast`를 명시 |
+| 포인터 차이(`ptrdiff_t`, 64비트)를 `int32`에 그냥 대입 | 경고 C4244 | `static_cast<int32>(...)`로 명시 |
+| 스페이스 들여쓰기 | 다른 파일과 불일치 | `편집 → 고급 → 탭 지정` |
+| (Claude) `sizeof(MemoryHeader)`를 32로 설명 | 테스트 출력으로 실제 16임을 확인 | 크기·정렬은 추측하지 말고 테스트로 출력해서 확인 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `MemoryHeaderAttachDetach` | `BaseAllocator::Alloc(헤더 + 64)` → `AttachHeader` → 바이트 차이 == `sizeof(MemoryHeader)`, 데이터 주소 16바이트 정렬, 데이터 64B를 다 써도 `allocSize_ == 64`, `DetachHeader` == 블록 시작 → 블록 시작으로 해제 | `OK (sizeof(MemoryHeader) = 16)` (Debug/Release) |
+
+> 📝 테스트 틀은 직접 작성(오프셋, Detach 확인)하고, 나머지 단계와 판정 출력은 요청해서 Claude가 완성했다.
+
+### 🧩 복습 질문
+**Q1. `DetachHeader`에 MemoryHeader를 거치지 않은 주소(예: `StompAllocator::Alloc`의 주소)를 넘기면?**
+> 🔺 내 답: 크래시 발생.
+> 💬 보충: `DetachHeader` 자체는 주소 계산(`ptr - 16`)만 하므로 크래시가 나지 않는다. 문제는 `allocSize_`를 **읽을 때**다. Stomp 작은 객체면 같은 페이지의 0을 읽어 조용히 틀리고, offset 0이면 이전 페이지라 AV, malloc 주소면 힙 헤더/다른 객체를 크기로 읽어 나중에 힙 손상. **가장 흔한 결과는 크래시가 아니라 조용히 틀린 값**이다.
+
+**Q2. `return header + 1;`을 `return reinterpret_cast<int8*>(header) + 1;`로 바꾸면?**
+> ✅ 내 답: header는 헤더 크기 단위로 포인터 연산을 해야 하는데 `int8*`로 바꾸면 의도와 다르게 1바이트만 이동한다.
+> 💬 보충: 블록 1000이면 1001을 준다 → ① 데이터가 헤더(`Next`, `allocSize_`)를 덮음 ② 16바이트 정렬 깨짐 ③ `DetachHeader(1001)`은 −16바이트로 985를 돌려줘 블록 시작과 어긋남 → 잘못된 주소로 해제.
