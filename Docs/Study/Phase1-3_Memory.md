@@ -5,7 +5,7 @@
 | Step | 파일 | 한 줄 요약 | 상태 |
 |---|---|---|---|
 | 1 | `Allocator.h/.cpp`, `Memory.h` | BaseAllocator + xnew / xdelete (placement new) | ✅ |
-| 2 | `Allocator.h/.cpp`, `Memory.h` | StompAllocator (VirtualAlloc, 해제 후 접근 즉시 크래시) | 🔄 진행 중 |
+| 2 | `Allocator.h/.cpp`, `Memory.h` | StompAllocator (VirtualAlloc, 해제 후 접근 즉시 크래시) + Debug 전용 `DefaultAllocator` | ✅ |
 
 ---
 
@@ -70,7 +70,7 @@ void xdelete(Type* obj)
 | 변경 | 이유 |
 |---|---|
 | `xdelete`에 nullptr 검사 | `delete nullptr`은 안전한데 검사가 없으면 `nullptr->~Type()` UB. 대체 함수는 같은 약속을 지켜야 한다 |
-| `STATIC_ASSERT`로 정렬 검사 | malloc은 `max_align_t`까지만 정렬 보장. `alignas(64)` 타입을 조용히 잘못된 주소에 만드는 것을 **컴파일 때** 막는다 |
+| `STATIC_ASSERT`로 정렬 검사 | `max_align_t` 이하 정렬만 허용해서, `alignas(64)` 타입을 조용히 잘못된 주소에 만드는 것을 **컴파일 때** 막는다 (MSVC에서 `max_align_t`는 8이다 → Step 2 ⚠️ 참고) |
 | `sizeof` → `static_cast<int32>` | x64에서 `size_t` → `int32` 축소 변환 경고 방지. 크기를 `int32`로 두는 건 이후 MemoryHeader·풀 테이블과 맞추기 위해 |
 | `<new>`, `<utility>`, `CoreMacro.h` 직접 include | 각 헤더가 자기가 쓰는 것을 직접 include하는 프로젝트 규칙 (pch에 기대지 않음) |
 
@@ -104,8 +104,6 @@ void xdelete(Type* obj)
 ---
 
 ## Step 2. StompAllocator
-
-> 📝 진행 중. 지금은 개념(Use-After-Free와의 관계)까지 정리했다. 🧱 핵심 코드, ⚠️ 겪은 실수, 🧪 테스트는 구현을 마친 뒤 채운다.
 
 ### 🎯 목표
 Debug 빌드에서 **해제 후 접근(Use-After-Free)과 뒤로 넘어가는 오버플로가 일어나는 그 줄에서 바로 크래시**가 나게 만드는 할당기를 만든다.
@@ -188,18 +186,165 @@ knight->hp_ = 50;       // ← Use-After-Free
 
 → 그래서 **Debug 전용**이다. Release에서는 실제 할당기(지금은 `BaseAllocator`, 나중에는 `PoolAllocator`)를 쓴다.
 
+### 📖 개념 7 — VirtualAlloc / VirtualFree
+```cpp
+LPVOID VirtualAlloc(LPVOID lpAddress, SIZE_T dwSize, DWORD flAllocationType, DWORD flProtect);	// 실패: NULL
+BOOL   VirtualFree(LPVOID lpAddress, SIZE_T dwSize, DWORD dwFreeType);							// 실패: 0 (FALSE)
+```
+| 상태 | 주소 사용 | 실제 메모리 | 접근 |
+|---|---|---|---|
+| 아무것도 안 함 | 다른 할당이 가져갈 수 있음 | 없음 | ❌ AV |
+| `MEM_RESERVE` | 나만 씀 | 없음 | ❌ AV |
+| `MEM_RESERVE \| MEM_COMMIT` | 나만 씀 | 있음 | ✅ |
+
+| `dwFreeType` | 하는 일 | 해제 후 |
+|---|---|---|
+| `MEM_DECOMMIT` | COMMIT만 취소 | 주소는 RESERVE로 남음 (64KB씩 주소 공간 누수) |
+| `MEM_RELEASE` | RESERVE까지 취소 | 주소 공간 전체 반납. **`dwSize`는 반드시 0** |
+
+- `VirtualAlloc` 반환 주소는 64KB 경계(할당 단위)라서 4KB 경계에도 맞다.
+- Win32 `BOOL` 성공은 "0이 아닌 값"이다 → `== TRUE`가 아니라 `!= FALSE`(또는 그대로)로 검사한다.
+
+### 📖 개념 8 — 포인터 산술과 `std::uintptr_t`
+| 포인터에 허용되는 연산 | 예 |
+|---|---|
+| 포인터 ± 정수 | `p + 16` (타입 크기 단위로 이동) |
+| 포인터 − 포인터 | `p2 - p1` |
+| 비교 | `p1 < p2` |
+
+- `%`, `*`, `/`, `&`는 포인터에 쓸 수 없다 → "주소가 4096의 배수인가" 같은 계산은 `reinterpret_cast<std::uintptr_t>(ptr)`로 정수로 바꿔서 한다.
+- 바이트 단위로 이동하려면 **1바이트 타입 포인터**(`int8*`)로 바꾼 뒤 더한다. `int32*`에 `offset`을 더하면 `offset × 4`바이트를 이동한다.
+- 올림은 비트 마스크(`& ~(N - 1)`) 대신 `(v + N - 1) / N * N`로 쓴다. 상수가 2의 거듭제곱이면 컴파일러가 같은 명령어로 바꿔 주므로 성능 차이가 없다.
+
+### 🧱 핵심 코드
+```cpp
+// Allocator.h
+class StompAllocator
+{
+public:
+	// size는 1 이상. 실패하면 크래시.
+	static void* Alloc(int32 size);
+
+	// Alloc이 돌려준 주소만 받는다. nullptr이면 아무 일도 하지 않는다
+	static void Release(void* ptr);
+
+private:
+	static constexpr int32 PAGE_SIZE = 0x1000;
+	// x64 Windows malloc과 같은 16바이트 (MEMORY_ALLOCATION_ALIGNMENT, 이후 SLIST도 16을 요구)
+	static constexpr int32 ALIGNMENT = 16;
+};
+```
+```cpp
+// Allocator.cpp
+void* StompAllocator::Alloc(int32 size)
+{
+	ASSERT_CRASH(size > 0 && size <= INT32_MAX - PAGE_SIZE);	// 올림 계산이 int32를 넘지 않도록 상한도 확인
+
+	// ① 정렬 올림  ②③ 페이지 단위 올림  ④ 앞쪽 빈 공간
+	const int32 alignedSize = (size + ALIGNMENT - 1) / ALIGNMENT * ALIGNMENT;
+	const int32 totalSize = (alignedSize + PAGE_SIZE - 1) / PAGE_SIZE * PAGE_SIZE;
+	const int32 offset = totalSize - alignedSize;
+
+	// ⑤ 페이지 단위로 받는다
+	void* base = ::VirtualAlloc(nullptr, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	ASSERT_CRASH(base != nullptr);
+
+	// ⑥ 데이터 끝 = 페이지 끝
+	return static_cast<int8*>(base) + offset;
+}
+
+void StompAllocator::Release(void* ptr)
+{
+	if (ptr == nullptr)
+		return;
+
+	// 4KB 경계에서 떨어진 만큼(= offset) 앞으로 돌아가면 base
+	const uintptr remainder = reinterpret_cast<uintptr>(ptr) % PAGE_SIZE;
+	void* base = static_cast<int8*>(ptr) - remainder;
+
+	BOOL res = ::VirtualFree(base, 0, MEM_RELEASE);
+	ASSERT_CRASH(res);
+}
+```
+```cpp
+// Memory.h — 할당기 선택은 이 한 곳에서만
+#ifdef _DEBUG
+using DefaultAllocator = StompAllocator;
+#else
+using DefaultAllocator = BaseAllocator;
+#endif
+// xnew → DefaultAllocator::Alloc, xdelete → DefaultAllocator::Release
+```
+
+> 💡 **실패 처리를 다르게 정한 이유**: `Alloc` 실패는 진짜 오류이고 `xnew`가 nullptr을 검사하지 않으므로 **그 자리에서 크래시**. `Release(nullptr)`은 정상 사용(`free(nullptr)`, `delete nullptr`과 같은 약속)이고, `BaseAllocator`와 같은 입력에 같은 동작을 해야 바꿔 끼울 수 있으므로 **아무것도 안 함**.
+
 ### 🔧 강의와 다른 점
 | 변경 | 이유 |
 |---|---|
-| **Debug에서만 Stomp 사용** (`_DEBUG`일 때 `USE_STOMP_ALLOCATOR` 정의 → `using DefaultAllocator = ...`) | 강의는 `#define _STOMP`가 항상 켜져 있어 Release 성능까지 떨어진다 (강의 결함 #5). 매크로 한 줄로 Debug에서도 끌 수 있어 나중에 MemoryPool을 Debug로 테스트할 수 있다 |
-| **반환 주소 16바이트 정렬 보장** | size를 그대로 끝에 붙이면 `size = 4`일 때 주소가 `...FFC`가 된다. `xnew`의 정렬 약속(`max_align_t`)을 할당기가 바뀌어도 지키기 위해 |
-| 상수를 `static constexpr std::size_t`로 (`PAGE_SIZE`, `ALIGNMENT`) | C++17에서 자동 `inline`이라 .cpp 정의 불필요. 크기 계산의 타입을 `size_t`로 통일 |
-| 주소 계산에 `std::uintptr_t` | 포인터를 정수로 바꿀 때는 포인터 크기의 부호 없는 정수가 맞다 |
+| **Debug에서만 Stomp 사용** (`#ifdef _DEBUG` → `using DefaultAllocator = ...`) | 강의는 `#define _STOMP`가 항상 켜져 있어 Release 성능까지 떨어진다 (강의 결함 #5). `_DEBUG`는 VS가 Debug 구성에서 자동으로 정의한다 |
+| 매크로 대신 `using` 타입 별칭 | 네임스페이스 규칙을 따르고, 디버거·IntelliSense에서 실제 타입으로 보이고, 같은 이름 토큰을 엉뚱하게 바꾸지 않는다 |
+| **반환 주소 16바이트 정렬 보장** | size를 그대로 끝에 붙이면 `size = 4`일 때 주소가 `...FFC`가 된다. x64 malloc과 같은 정렬을 할당기가 바뀌어도 지키기 위해 |
+| `VirtualFree` 반환값 검사 | 인자를 잘못 넣으면(`dwSize ≠ 0`, 다른 할당기의 주소) 조용히 실패해서 누수 + UAF 미검출이 된다 |
+| 상수와 크기 계산을 모두 `int32`로 (`static constexpr int32 PAGE_SIZE`, `ALIGNMENT`) | `Alloc(int32 size)`, 이후 MemoryHeader·풀 테이블과 타입 통일 → 부호 있음/없음 혼합과 캐스팅이 사라진다. `static constexpr`은 C++17에서 자동 `inline`이라 .cpp 정의 불필요. 대신 `size + PAGE_SIZE - 1`이 int32를 넘지 않도록 상한 `ASSERT_CRASH` |
+| 주소 계산에 `uintptr` (`Types.h`의 `std::uintptr_t` 별칭) | 포인터를 정수로 바꿀 때는 포인터 크기의 부호 없는 정수가 맞다. `Types.cpp`에서 `sizeof(void*)`와 같은지 검증. 크기는 int32로 바꿔도 주소는 64비트라 바꾸면 안 된다 |
 | `<Windows.h>`는 .cpp에만 | 헤더에 넣으면 ServerCore를 include하는 모든 파일(클라이언트 엔진 포함)로 퍼진다 |
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| `ALIGNMENT = alignof(std::max_align_t)`로 정함 (16이라고 가정) | MSVC에서는 **8**이라 `StompAllocFree`가 Debug/Release 모두 FAIL (`address ...ff8`, `aligned 0`) | 정렬 같은 값은 가정하지 말고 테스트로 확인. `max_align_t`는 컴파일러마다 다르다 (GCC/Clang 16, MSVC 8). x64 Windows malloc의 실제 정렬은 16 |
+| 헤더 약속("실패하면 nullptr")과 코드(`ASSERT_CRASH`)가 다름 | 사용하는 쪽이 어느 쪽을 믿어야 할지 모름 | 주석의 약속과 코드는 항상 일치시킨다. 하나를 고치면 다른 쪽도 고친다 |
+| `Release`에서 nullptr을 크래시로 처리 | Debug(Stomp)에서만 크래시, Release(Base)는 정상 → 구성마다 동작이 다름 | 바꿔 끼우는 할당기는 같은 입력에 같은 의미로 동작해야 한다 |
+| `VirtualFree` 반환값 무시 | 실패해도 모름 | 실패할 수 있는 API는 결과를 변수로 받아 검사 (ASSERT 괄호 안에 호출을 직접 넣지 않기) |
+| 포인터에 `%`를 쓰려 함 | 컴파일 에러 | 포인터 산술은 ±정수, 포인터−포인터, 비교뿐. 정수 계산은 `uintptr_t` |
+| 스페이스/탭 들여쓰기 섞임 | 파일 안에서 불일치 | 붙여넣은 뒤 들여쓰기 확인 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `StompAllocFree` | `StompAllocator`를 직접 호출 (Release에서도 테스트됨). 크기 8 / 4096 / 5000마다 16바이트 정렬, `(주소 + 올린 크기) % 4096 == 0`(페이지 끝), 전체 쓰기/읽기, 해제. 마지막에 `Release(nullptr)` | `OK` (Debug/Release) |
+| `CrashStompUseAfterFree` | `xnew<MemoryTestKnight>` → `xdelete` → `knight->hp_ = 50` | Debug: 그 줄에서 Access Violation / Release: `FAIL` 출력이 정상 (BaseAllocator) |
+| `CrashStompOverflow` | `StompAllocator::Alloc(16)` → `bytes[16] = 1` | Debug/Release 모두 그 줄에서 Access Violation |
+
+> 📝 2026-10-27: 정상 테스트 Debug/Release 통과, 크래시 테스트 2개 직접 확인.
+
+> 💡 정상 테스트만으로는 "오류를 잡는 기능"을 확인할 수 없다. `Alloc`/`Release`가 임시 `malloc`/`free` 코드였어도 `XnewXdelete`는 통과했다. **오류를 일부러 만들어서** 크래시가 나는지 봐야 한다.
+
+> 📝 테스트 코드는 사용자 요청으로 Claude가 작성했다.
 
 ### 🧩 복습 질문
 **Q1. `int32` 3개(12B)를 할당하고 `[3]`에 쓰면 크래시가 날까? 이유는?**
 > (미답변)
 
 **Q2. 앞쪽으로 넘어가는 접근(`arr[-1]`, Underflow)은 이 방식으로 잡힐까? 안 잡힌다면 어떻게 바꿔야 잡을 수 있을까?**
+> (미답변)
+
+**Q3. `(4096 + 4096 - 1) / 4096 * 4096`과 `(4097 + 4096 - 1) / 4096 * 4096`의 결과는?**
+> (미답변)
+
+**Q4. 올림 공식에서 `+ N - 1` 대신 `+ N`을 더하면 어떤 입력에서 틀릴까?**
+> (미답변)
+
+**Q5. `MEM_COMMIT` 없이 `MEM_RESERVE`만 주고 반환 주소에 값을 쓰면?**
+> 💬 (해설 요청) 쓰는 순간 Access Violation. RESERVE는 주소 범위만 내 것으로 표시하고 실제 메모리를 연결하지 않는다. `PAGE_READWRITE`도 커밋된 페이지에만 의미가 있다. RESERVE만 하는 용도는 큰 범위를 미리 잡고 필요할 때 조금씩 COMMIT하는 것 (예: 스레드 스택 1MB 예약 후 쓰는 만큼 커밋).
+
+**Q6. `static_cast<int32*>(base) + offset`으로 잘못 쓰면?**
+> ✅ offset × 1바이트가 아니라 offset × 4바이트 이동해서 주소가 잘못된다.
+> 💬 보충: 예시 A에서 `0xFF0 × 4 = 0x3FC0` → 받은 4KB 밖 → 생성자에서 바로 AV. 여러 페이지를 받은 큰 객체라면 할당 범위 안에 떨어져서 **조용히** 틀릴 수도 있다 (페이지 끝 배치가 깨져 오버플로 검출이 사라짐).
+
+**Q7. `Alloc`에서는 `int8*`로 더했는데 `Release`에서는 왜 `std::uintptr_t`가 필요할까?**
+> 💬 (질문 중 해설) 포인터에는 `%`를 쓸 수 없다. 4KB 경계에서 떨어진 거리(나머지)를 구하려면 주소를 정수로 바꿔야 한다. 빼기 자체는 다시 `int8*`로 할 수 있다.
+
+**Q8. `VirtualFree`의 `dwSize`에 0 대신 4096을 넣으면?**
+> ✅ (코드 주석으로 답함) 할당된 크기는 OS가 기억하므로 MEM_RELEASE에서는 0이어야 한다.
+> 💬 보충: 넣으면 FALSE 반환(`ERROR_INVALID_PARAMETER` 87), 아무것도 해제되지 않는다. 크래시가 없으니 **누수 + 해제 후 접근이 성공(UAF 미검출)**이 조용히 생긴다 → 반환값 검사가 필요한 이유.
+
+**Q9. Debug에서 `xnew`로 받은 객체를 `::free()`로 해제하면?**
+> ❌ 내 답: 페이지 단위로 크게 잡았는데 데이터 크기만 제거되어 메모리 누수.
+> 💬 보충: `free`는 크기를 받지 않고, 포인터 **바로 앞의 힙 헤더**를 읽어 동작한다. Stomp가 준 주소 앞에는 헤더가 없으므로 Debug CRT가 `_CrtIsValidHeapPointer` 단언 실패/크래시를 낸다 (표준상 UB). 할당과 해제는 반드시 짝(`malloc↔free`, `VirtualAlloc↔VirtualFree`, `xnew↔xdelete`)을 맞춰야 한다.
+
+**Q10. `XnewXdelete`가 Debug에서 통과하면 StompAllocator가 UAF를 잡는다고 확신할 수 있나?**
+> 💬 (모르겠다 → 해설) 없다. 정상 테스트는 정상 경로만 지나간다. 임시 `malloc`/`free` 코드였어도 통과했을 것이다. 잡는 기능은 일부러 UAF/오버플로를 내는 크래시 테스트로 확인한다.
+
+**Q11. `CrashStompOverflow`에서 크기 8을 요청하고 인덱스 8에 쓰면 크래시가 날까?**
 > (미답변)

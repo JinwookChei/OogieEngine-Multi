@@ -11,9 +11,9 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 Step 2 `StompAllocator`** 구현 중 — 헤더 선언 + 동작 설명 주석 완료(Claude 작성, 사용자 요청), `Allocator.cpp`는 사용자가 작성 중(현재 malloc 임시 코드). 다음: 구현 → `Memory.h` 할당기 선택 → 테스트 3개 → 리뷰 (확인 질문은 Phase 1-2 Step 3부터 이어서) |
-| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) |
-| 마지막 작업 | 2026-10-24 — 크래시 테스트 3개 확인 완료, 콘솔 한글 깨짐 수정(`SetConsoleOutputCP(CP_UTF8)`), 확인 질문 Phase 1-1 Step 6 / Phase 1-2 Step 1 답변 |
+| 현재 위치 | **Phase 1-3 Step 2 `StompAllocator` 완료** (커밋 전). 다음: 커밋 → Step 3 `MemoryHeader` + `MemoryPool`(SLIST) |
+| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) |
+| 마지막 작업 | 2026-10-27 — StompAllocator 구현, `ALIGNMENT` 8 → 16 수정 (MSVC `max_align_t`는 8), 테스트 3개 확인, CLAUDE.md에 "쉬운 버전 코드 예시" 규칙 추가 |
 | 남은 숙제 | 확인 질문 미답변 ↓ (Phase 1-2 Step 3 ①은 사용자가 다음에 풀기로 함) |
 
 **확인 질문 (미답변)**
@@ -22,21 +22,19 @@
 - Phase 1-2 Step 5: ① `Visited`도 크래시로 처리하면 ◇ 예제(A→B, A→C, C→B)의 어느 단계에서 오탐이 나나 ② `CheckCycle` 끝의 `visitStates_.clear()`를 지워도 되나
 - Phase 1-2 Step 6: ① 두 스레드를 Join 없이 동시에 돌려도 진짜 데드락 전에 Profiler가 먼저 크래시를 낼 수 있는 이유 ② 스레드 1개로 P→Q, 해제, Q→P를 해도 크래시가 나나? 그럼 왜 스레드 2개로 테스트하나
 - Phase 1-3 Step 1: ① `xdelete`에서 소멸자 호출을 빼먹으면 생기는 문제 (멤버 `std::vector`) ② `Args&&` + `forward` 대신 값으로 받으면 달라지는 점
+- Phase 1-3 Step 2: Q1 12B 할당 후 `[3]` 쓰기, Q2 Underflow, Q3 올림 결과 4096/4097, Q4 `+ N`이면 틀리는 입력, Q11 크기 8 + 인덱스 8 쓰기 (학습 정리 문서 번호)
 
 **테스트 현황** (`GameServer/Test.cpp`, Step 4·6에서 사용자 요청으로 Claude가 작성)
-- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete` → Debug/Release 모두 통과
+- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete`, `StompAllocFree` → Debug/Release 모두 통과
+- `CrashStompUseAfterFree`(Debug만 AV), `CrashStompOverflow`(Debug/Release 모두 AV) → 사용자 확인 완료 (2026-10-27)
 - `CrashDeadLockCycle` → Debug에서 `DEADLOCK: Cycle_R -> Cycle_P` 출력 후 크래시, Release는 FAIL 출력 (Claude가 확인)
 - 크래시 (F5로 하나씩): `CrashInvalidUnlockOrder`(INVALID_UNLOCK_ORDER), `CrashUnknownLock`(UNKNOWN_LOCK), `CrashThreadIdZero`(ASSERT_CRASH LThreadId) → 사용자 확인 완료 (2026-10-24). Release에서는 Profiler 2개가 FAIL 출력이 정상
-- ⚠️ `GameServer.cpp`: 정상 테스트 4개가 주석 처리된 상태 + `Atomic<int32> a` 실험 코드 남아 있음 → 다시 켜고 정리할 것
 - 사소함: `#endif // DEBUG` → `// _DEBUG`, `CoreTLS.h` 주석 스페이스 들여쓰기, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음)
 
 **다음에 할 일**
 0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`)
-1. **Phase 1-3 Step 2 `StompAllocator` 안내** (Claude가 Step 형식으로 설명 → 사용자 작성 → 리뷰)
-   - 내용: `VirtualAlloc`/`VirtualFree`로 페이지(4KB) 단위 할당, 데이터를 **페이지 끝에 붙여** 오버플로도 검출, 해제 후 접근(Use-After-Free) 시 즉시 Access Violation
-   - 🔧 개선 포인트: 강의 결함 #5 `_STOMP`가 항상 켜짐 → **Debug 전용**으로 분리 (`Memory.h`에서 할당기 선택)
-   - 예정 테스트 이름: `StompAllocFree`(정상), `CrashStompUseAfterFree`, `CrashStompOverflow`(크래시)
-2. Step 3 이후: `MemoryHeader` + `MemoryPool`(SLIST) → `Memory`(풀 테이블) + `PoolAllocator` → `MakeShared` → `StlAllocator` + `Container.h` → `ObjectPool<T>`
+1. Phase 1-3 Step 2 커밋 (사용자가 요청하면) — `feat(ServerCore): implement StompAllocator ... (Phase 1-3 Step 2)` + `docs:` (Plan.md, 학습 정리, CLAUDE.md)
+2. **Phase 1-3 Step 3**: `MemoryHeader` + `MemoryPool`(SLIST, 16바이트 정렬 필요) → 이후 `Memory`(풀 테이블) + `PoolAllocator` → `MakeShared` → `StlAllocator` + `Container.h` → `ObjectPool<T>`
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각. 지시할 때는 **테스트 함수 이름과 보조 클래스 이름을 먼저 정해서** 준다. 정상 테스트는 `main`에서 항상 켜 두고, 크래시 테스트(`Crash` 접두사)만 주석으로 둔다. 테스트는 값을 출력만 하지 않고 코드가 비교해서 `OK`/`FAIL`을 낸다.
 
@@ -148,12 +146,13 @@ Phase 9  포트폴리오 정리
 
 ### 1-3. 메모리
 - [x] Step 1 `BaseAllocator` + `xnew`/`xdelete` (`Memory.h`, placement new, 완벽 전달) — 🔧 nullptr 검사, 정렬 `STATIC_ASSERT`, 테스트 `XnewXdelete`
-- [ ] `StompAllocator` / `PoolAllocator` / `StlAllocator`
+- [x] Step 2 `StompAllocator` (VirtualAlloc, 페이지 끝 배치, 16바이트 정렬) + `Memory.h` `DefaultAllocator`(Debug만 Stomp) — 🔧 강의 결함 #5, 테스트 `StompAllocFree` / `CrashStompUseAfterFree` / `CrashStompOverflow`
+- [ ] `PoolAllocator` / `StlAllocator`
 - [ ] `MemoryPool` (SLIST lock-free), `MemoryHeader`
 - [ ] `Memory` (32~4096 크기별 풀 테이블), `xnew` / `xdelete` / `MakeShared`
 - [ ] `ObjectPool<T>`
 - [ ] `Container.h` (`Vector`, `Map`, `HashMap`, `Queue`, `String` ...)
-- [ ] 테스트: Stomp 모드에서 해제 후 접근(Use-After-Free) 시 즉시 크래시 확인
+- [x] 테스트: Stomp 모드에서 해제 후 접근(Use-After-Free) 시 즉시 크래시 확인
 
 ### 1-4. 네트워크
 - [ ] `SocketUtils` (WSAStartup, `AcceptEx`/`ConnectEx`/`DisconnectEx` 함수 포인터 바인딩, 소켓 옵션)
