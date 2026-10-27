@@ -4,6 +4,7 @@
 #include "ThreadManager.h"
 #include "Lock.h"
 #include "Memory.h"
+#include "MemoryPool.h"
 #include "Test.h"
 
 
@@ -409,3 +410,44 @@ void CrashStompOverflow()
 }
 
 
+/*
+	[Memory 테스트] MemoryHeader
+*/
+void MemoryHeaderAttachDetach()
+{
+	constexpr int32 DATA_SIZE = 64;
+	const int32 headerSize = static_cast<int32>(sizeof(MemoryHeader));
+
+	// 블록 = [MemoryHeader][Data 64B]. malloc은 16바이트 정렬을 주므로 SLIST 조건을 만족한다
+	void* memory = BaseAllocator::Alloc(headerSize + DATA_SIZE);
+	MemoryHeader* block = static_cast<MemoryHeader*>(memory);
+	void* data = MemoryHeader::AttachHeader(block, DATA_SIZE);
+
+	// 1) 데이터 주소 = 블록 시작 + 헤더 크기 (바이트 차이는 int8*로 빼서 구한다)
+	const int32 offset = static_cast<int32>(static_cast<int8*>(data) - static_cast<int8*>(memory));
+	const bool offsetOk = (offset == headerSize);
+
+	// 2) 데이터 주소도 16바이트 정렬
+	const bool aligned = (reinterpret_cast<uintptr>(data) % SLIST_ALIGNMENT == 0);
+
+	// 3) 데이터 영역 전체에 써도 헤더가 그대로인지 (데이터가 헤더를 덮지 않는다)
+	int8* bytes = static_cast<int8*>(data);
+	for (int32 i = 0; i < DATA_SIZE; ++i)
+		bytes[i] = static_cast<int8>(0x7F);
+	const bool headerIntact = (block->allocSize_ == DATA_SIZE);
+
+	// 4) 데이터 주소에서 되찾은 헤더 = 블록 시작
+	const bool detachOk = (MemoryHeader::DetachHeader(data) == block);
+
+	// 5) 해제는 데이터 주소가 아니라 블록 시작으로 한다 (malloc이 돌려준 주소)
+	BaseAllocator::Release(memory);
+
+	if (offsetOk == false || aligned == false || headerIntact == false || detachOk == false)
+	{
+		std::cout << "[MemoryHeaderAttachDetach] FAIL : offset " << offset << " (expected " << headerSize << ")"
+			<< ", aligned " << aligned << ", headerIntact " << headerIntact << ", detachOk " << detachOk << std::endl;
+		return;
+	}
+
+	std::cout << "[MemoryHeaderAttachDetach] OK (sizeof(MemoryHeader) = " << headerSize << ")" << std::endl;
+}

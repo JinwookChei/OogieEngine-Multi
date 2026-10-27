@@ -16,6 +16,7 @@ void NoCycleLock();         // ◇ 모양(X → Y, X → Z, Z → Y) + 분리된
 */
 void XnewXdelete();         // 생성자 인자 전달, 소멸자 호출, nullptr 해제
 void StompAllocFree();      // StompAllocator 직접 호출: 정렬, 페이지 끝 배치, 읽기/쓰기, nullptr 해제 (크기 8 / 4096 / 5000)
+void MemoryHeaderAttachDetach();  // 헤더 붙이기/떼기: 데이터 주소 = 블록 + sizeof(헤더), 16바이트 정렬, 데이터가 헤더를 덮지 않음
 
 /*
 	크래시 테스트: 호출하면 반드시 크래시가 나야 정상이다. 한 번에 하나만 호출한다.
