@@ -6,6 +6,19 @@
 #include "Types.h"
 #include "Allocator.h"
 
+/*
+				[DefaultAllocator]
+				xnew/xdelete가 쓰는 할당기. 빌드 구성에 따라 여기서 한 번만 고른다.
+				- Debug  : StompAllocator (해제 후 접근, 오버플로를 그 줄에서 크래시로 잡는다)
+				- Release: BaseAllocator  (빠르다. 나중에 PoolAllocator로 바꾼다)
+				Alloc과 Release가 항상 같은 할당기를 쓰도록 이 별칭 하나로 묶는다.
+*/
+#ifdef _DEBUG
+using DefaultAllocator = StompAllocator;
+#else
+using DefaultAllocator = BaseAllocator;
+#endif
+
 
 /*
 		[xnew / xdelete]
@@ -15,11 +28,11 @@
 template<typename Type, typename... Args>
 Type* xnew(Args&&... args)
 {
-	// malloc은 max_align_t 단위까지만 정렬을 보장한다. 그보다 큰 정렬을 요구하는 타입은 컴파일 단계에서 막는다
+	// 할당기들은 16바이트 정렬을 준다 (x64 malloc, StompAllocator). 확실히 만족하는 max_align_t(MSVC는 8) 이하 정렬만 허용하고, 그보다 큰 정렬을 요구하는 타입은 컴파일 단계에서 막는다
 	STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
 
 	// ① 메모리만 확보
-	Type* memory = static_cast<Type*>(BaseAllocator::Alloc(static_cast<int32>(sizeof(Type))));
+	Type* memory = static_cast<Type*>(DefaultAllocator::Alloc(static_cast<int32>(sizeof(Type))));
 
 	// ② 확보한 주소 위에서 생성자만 호출 (placement new). 인자는 받은 그대로 전달한다
 	new(memory) Type(std::forward<Args>(args)...);
@@ -35,5 +48,5 @@ void xdelete(Type* obj)
 
 	// ① 소멸자를 직접 호출  ② 메모리 반납
 	obj->~Type();
-	BaseAllocator::Release(obj);
+	DefaultAllocator::Release(obj);
 }
