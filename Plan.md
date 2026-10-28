@@ -14,16 +14,11 @@
 | 현재 위치 | **Phase 1-3 Step 3-2 `MemoryPool` 완료** (커밋/push 완료). 다음: **Step 4 `Memory`(크기별 풀 테이블) + `PoolAllocator`** 안내부터 |
 | 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) |
 | 마지막 작업 | 2026-10-28 — Step 3-2 MemoryPool 구현 + 테스트 3개 (`MemoryPoolReuse`, `MemoryPoolConcurrent`, `CrashMemoryPoolDoublePush`), 학습 정리에 SLIST_ENTRY/SLIST_HEADER/ABA/구조 그림 추가 |
-| 남은 숙제 | 확인 질문 미답변 ↓ (Phase 1-2 Step 3 ①은 사용자가 다음에 풀기로 함) |
+| 남은 숙제 | Step 4-1 `Memory` 작성 중 (안내 완료, 2026-10-28) |
 
 **확인 질문 (미답변)**
-- Phase 1-2 Step 3: ① 이름 없는 가드 `WriteLockGuard(locks_[0], "Room");`는 어떻게 되나 ② `READ_LOCK` 중 `Push()`(WRITE_LOCK) 호출 시 결과
-- Phase 1-2 Step 4: ① 같은 클래스의 서로 다른 객체 2개를 차례로 잡으면 Profiler는 어떻게 인식하나 (한계) ② PushLock을 실제 Lock 획득 전에 호출하는 이유
-- Phase 1-2 Step 5: ① `Visited`도 크래시로 처리하면 ◇ 예제(A→B, A→C, C→B)의 어느 단계에서 오탐이 나나 ② `CheckCycle` 끝의 `visitStates_.clear()`를 지워도 되나
-- Phase 1-2 Step 6: ① 두 스레드를 Join 없이 동시에 돌려도 진짜 데드락 전에 Profiler가 먼저 크래시를 낼 수 있는 이유 ② 스레드 1개로 P→Q, 해제, Q→P를 해도 크래시가 나나? 그럼 왜 스레드 2개로 테스트하나
-- Phase 1-3 Step 1: ① `xdelete`에서 소멸자 호출을 빼먹으면 생기는 문제 (멤버 `std::vector`) ② `Args&&` + `forward` 대신 값으로 받으면 달라지는 점
-- Phase 1-3 Step 2: Q1 12B 할당 후 `[3]` 쓰기, Q2 Underflow, Q3 올림 결과 4096/4097, Q4 `+ N`이면 틀리는 입력, Q11 크기 8 + 인덱스 8 쓰기 (학습 정리 문서 번호)
-- Phase 1-3 Step 3-1, 3-2: 없음 (모두 답변 또는 해설 완료)
+- 없음. Phase 1-2 Step 3~6, Phase 1-3 Step 1~2의 미답변 질문은 2026-10-28 사용자 요청으로 Claude가 해설을 채움 (학습 정리 문서의 `💬 (해설 요청)`)
+- Phase 1-3 Step 4-1 `Memory`: ① `Allocate(40)` / `Allocate(4081)`의 경로 ② 이중 Release를 `blockSize > 0` 검사가 항상 잡는가
 
 **테스트 현황** (`GameServer/Test.cpp`, Step 4·6에서 사용자 요청으로 Claude가 작성)
 - 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete`, `StompAllocFree`, `MemoryHeaderAttachDetach`, `MemoryPoolReuse`, `MemoryPoolConcurrent` → Debug/Release 모두 통과
