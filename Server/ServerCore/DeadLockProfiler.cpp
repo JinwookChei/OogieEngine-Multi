@@ -3,11 +3,11 @@
 #include "DeadLockProfiler.h"
 #include <cstdio>
 
-void DeadLockProfiler::PushLock(const char* name)
+void DeadLockProfiler::PushLock(const char* pName)
 {
 	LockGuard guard(lock_);
 
-	const int32 lockId = GetOrCreateLockId(name);
+	const int32 lockId = GetOrCreateLockId(pName);
 
 	// 이미 잡고 있는 락이 있으면 "직전 락 → 새 락" 간선을 기록한다
 	if (LLockStack.empty() == false)
@@ -28,14 +28,14 @@ void DeadLockProfiler::PushLock(const char* name)
 	LLockStack.push(lockId);
 }
 
-void DeadLockProfiler::PopLock(const char* name)
+void DeadLockProfiler::PopLock(const char* pName)
 {
 	LockGuard guard(lock_);
 
 	if (LLockStack.empty())
 		CRASH("MULTIPLE_UNLOCK");
 
-	auto findIt = nameToId_.find(name);
+	auto findIt = nameToId_.find(pName);
 	if (findIt == nameToId_.end())
 		CRASH("UNKNOWN_LOCK");
 
@@ -46,15 +46,15 @@ void DeadLockProfiler::PopLock(const char* name)
 	LLockStack.pop();
 }
 
-int32 DeadLockProfiler::GetOrCreateLockId(const char* name)
+int32 DeadLockProfiler::GetOrCreateLockId(const char* pName)
 {
-	auto findIt = nameToId_.find(name);
+	auto findIt = nameToId_.find(pName);
 	if (findIt != nameToId_.end())
 		return findIt->second;
 
 	const int32 lockId = static_cast<int32>(idToName_.size());
-	nameToId_.emplace(name, lockId);
-	idToName_.push_back(name);
+	nameToId_.emplace(pName, lockId);
+	idToName_.push_back(pName);
 	return lockId;
 }
 

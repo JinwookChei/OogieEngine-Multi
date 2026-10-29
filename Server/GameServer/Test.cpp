@@ -295,21 +295,21 @@ void XnewXdelete()
 	MemoryTestKnight::SDestructCount = 0;
 
 	// 1) 생성: 생성자가 한 번 호출되고, 인자가 그대로 전달되어야 한다
-	MemoryTestKnight* knight = xnew<MemoryTestKnight>(100, 10);
+	MemoryTestKnight* pKnight = xnew<MemoryTestKnight>(100, 10);
 	if (MemoryTestKnight::SConstructCount != 1 || MemoryTestKnight::SDestructCount != 0)
 	{
 		std::cout << "[XnewXdelete] FAIL : xnew 후 생성자/소멸자 호출 횟수 (construct "
 			<< MemoryTestKnight::SConstructCount << ", destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
 		return;
 	}
-	if (knight->hp_ != 100 || knight->attack_ != 10)
+	if (pKnight->hp_ != 100 || pKnight->attack_ != 10)
 	{
-		std::cout << "[XnewXdelete] FAIL : 생성자 인자 전달 (hp " << knight->hp_ << ", attack " << knight->attack_ << ")" << std::endl;
+		std::cout << "[XnewXdelete] FAIL : 생성자 인자 전달 (hp " << pKnight->hp_ << ", attack " << pKnight->attack_ << ")" << std::endl;
 		return;
 	}
 
 	// 2) 해제: 소멸자가 한 번 호출되어야 한다
-	xdelete(knight);
+	xdelete(pKnight);
 	if (MemoryTestKnight::SDestructCount != 1)
 	{
 		std::cout << "[XnewXdelete] FAIL : xdelete 후 소멸자 호출 횟수 (destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
@@ -318,8 +318,8 @@ void XnewXdelete()
 
 	// 3) nullptr 해제: 크래시 없이 아무 일도 하지 않아야 한다 (소멸자 호출 X)
 	// nullptr만 넘기면 Type을 추론할 수 없으므로 타입이 있는 포인터 변수로 넘긴다
-	MemoryTestKnight* nullKnight = nullptr;
-	xdelete(nullKnight);
+	MemoryTestKnight* pNullKnight = nullptr;
+	xdelete(pNullKnight);
 	if (MemoryTestKnight::SDestructCount != 1)
 	{
 		std::cout << "[XnewXdelete] FAIL : xdelete(nullptr)가 소멸자를 호출함 (destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
@@ -340,8 +340,8 @@ void StompAllocFree()
 
 	for (int32 size : sizes)
 	{
-		void* ptr = StompAllocator::Alloc(size);
-		const uintptr address = reinterpret_cast<uintptr>(ptr);
+		void* pPtr = StompAllocator::Alloc(size);
+		const uintptr address = reinterpret_cast<uintptr>(pPtr);
 		const uintptr alignedSize = (static_cast<uintptr>(size) + ALIGN - 1) / ALIGN * ALIGN;
 
 		// 1) 정렬: 반환 주소가 16의 배수
@@ -351,19 +351,19 @@ void StompAllocFree()
 		const bool atPageEnd = ((address + alignedSize) % PAGE == 0);
 
 		// 3) 받은 메모리 전체를 쓰고 다시 읽는다 (커밋이 안 된 바이트가 있으면 여기서 크래시)
-		int8* bytes = static_cast<int8*>(ptr);
+		int8* pBytes = static_cast<int8*>(pPtr);
 		for (int32 i = 0; i < size; ++i)
-			bytes[i] = static_cast<int8>(i);
+			pBytes[i] = static_cast<int8>(i);
 
 		bool dataOk = true;
 		for (int32 i = 0; i < size; ++i)
 		{
-			if (bytes[i] != static_cast<int8>(i))
+			if (pBytes[i] != static_cast<int8>(i))
 				dataOk = false;
 		}
 
 		// 4) 해제: VirtualFree가 실패하면 Release 안의 ASSERT_CRASH에서 멈춘다
-		StompAllocator::Release(ptr);
+		StompAllocator::Release(pPtr);
 
 		if (aligned == false || atPageEnd == false || dataOk == false)
 		{
@@ -385,11 +385,11 @@ void StompAllocFree()
 */
 void CrashStompUseAfterFree()
 {
-	MemoryTestKnight* knight = xnew<MemoryTestKnight>(100, 10);
-	xdelete(knight);
+	MemoryTestKnight* pKnight = xnew<MemoryTestKnight>(100, 10);
+	xdelete(pKnight);
 
 	// 해제된 객체에 쓴다 → Debug(StompAllocator): 페이지가 OS에 반납되어 이 줄에서 Access Violation
-	knight->hp_ = 50;
+	pKnight->hp_ = 50;
 
 	std::cout << "[CrashStompUseAfterFree] FAIL : 크래시가 나지 않았다 (Release는 BaseAllocator라 정상)" << std::endl;
 }
@@ -400,13 +400,13 @@ void CrashStompOverflow()
 	constexpr int32 SIZE = 16;
 
 	// xnew를 거치지 않고 StompAllocator를 직접 쓰므로 Release 빌드에서도 크래시가 나야 한다
-	int8* bytes = static_cast<int8*>(StompAllocator::Alloc(SIZE));
+	int8* pBytes = static_cast<int8*>(StompAllocator::Alloc(SIZE));
 
-	bytes[SIZE - 1] = 1;   // 마지막 바이트: 정상
-	bytes[SIZE] = 1;       // 한 바이트 넘어감 → 할당되지 않은 주소 → 이 줄에서 Access Violation
+	pBytes[SIZE - 1] = 1;   // 마지막 바이트: 정상
+	pBytes[SIZE] = 1;       // 한 바이트 넘어감 → 할당되지 않은 주소 → 이 줄에서 Access Violation
 
 	std::cout << "[CrashStompOverflow] FAIL : 크래시가 나지 않았다" << std::endl;
-	StompAllocator::Release(bytes);
+	StompAllocator::Release(pBytes);
 }
 
 
@@ -419,28 +419,28 @@ void MemoryHeaderAttachDetach()
 	const int32 headerSize = static_cast<int32>(sizeof(MemoryHeader));
 
 	// 블록 = [MemoryHeader][Data 64B]. malloc은 16바이트 정렬을 주므로 SLIST 조건을 만족한다
-	void* memory = BaseAllocator::Alloc(headerSize + DATA_SIZE);
-	MemoryHeader* block = static_cast<MemoryHeader*>(memory);
-	void* data = MemoryHeader::AttachHeader(block, DATA_SIZE);
+	void* pMemory = BaseAllocator::Alloc(headerSize + DATA_SIZE);
+	MemoryHeader* pBlock = static_cast<MemoryHeader*>(pMemory);
+	void* pData = MemoryHeader::AttachHeader(pBlock, DATA_SIZE);
 
 	// 1) 데이터 주소 = 블록 시작 + 헤더 크기 (바이트 차이는 int8*로 빼서 구한다)
-	const int32 offset = static_cast<int32>(static_cast<int8*>(data) - static_cast<int8*>(memory));
+	const int32 offset = static_cast<int32>(static_cast<int8*>(pData) - static_cast<int8*>(pMemory));
 	const bool offsetOk = (offset == headerSize);
 
 	// 2) 데이터 주소도 16바이트 정렬
-	const bool aligned = (reinterpret_cast<uintptr>(data) % SLIST_ALIGNMENT == 0);
+	const bool aligned = (reinterpret_cast<uintptr>(pData) % SLIST_ALIGNMENT == 0);
 
 	// 3) 데이터 영역 전체에 써도 헤더가 그대로인지 (데이터가 헤더를 덮지 않는다)
-	int8* bytes = static_cast<int8*>(data);
+	int8* pBytes = static_cast<int8*>(pData);
 	for (int32 i = 0; i < DATA_SIZE; ++i)
-		bytes[i] = static_cast<int8>(0x7F);
-	const bool headerIntact = (block->allocSize_ == DATA_SIZE);
+		pBytes[i] = static_cast<int8>(0x7F);
+	const bool headerIntact = (pBlock->allocSize_ == DATA_SIZE);
 
 	// 4) 데이터 주소에서 되찾은 헤더 = 블록 시작
-	const bool detachOk = (MemoryHeader::DetachHeader(data) == block);
+	const bool detachOk = (MemoryHeader::DetachHeader(pData) == pBlock);
 
 	// 5) 해제는 데이터 주소가 아니라 블록 시작으로 한다 (malloc이 돌려준 주소)
-	BaseAllocator::Release(memory);
+	BaseAllocator::Release(pMemory);
 
 	if (offsetOk == false || aligned == false || headerIntact == false || detachOk == false)
 	{
@@ -463,23 +463,23 @@ void MemoryPoolReuse()
 	MemoryPool pool(blockSize);
 
 	// 1) 처음 Pop: 풀이 비어 있으므로 새로 할당된다
-	MemoryHeader* first = pool.Pop();
-	void* data = MemoryHeader::AttachHeader(first, blockSize);
-	const bool aligned = (reinterpret_cast<uintptr>(first) % SLIST_ALIGNMENT == 0);
+	MemoryHeader* pFirst = pool.Pop();
+	void* pData = MemoryHeader::AttachHeader(pFirst, blockSize);
+	const bool aligned = (reinterpret_cast<uintptr>(pFirst) % SLIST_ALIGNMENT == 0);
 	const bool countAfterPop = (pool.GetUseCount() == 1 && pool.GetReserveCount() == 0);
 
 	// 2) Push: 해제하지 않고 풀에 보관된다
-	pool.Push(MemoryHeader::DetachHeader(data));
+	pool.Push(MemoryHeader::DetachHeader(pData));
 	const bool countAfterPush = (pool.GetUseCount() == 0 && pool.GetReserveCount() == 1);
 
 	// 3) 다시 Pop: 방금 넣은 블록이 그대로 다시 나와야 한다 (LIFO 재사용)
-	MemoryHeader* second = pool.Pop();
-	const bool reused = (second == first);
+	MemoryHeader* pSecond = pool.Pop();
+	const bool reused = (pSecond == pFirst);
 	const bool countAfterReuse = (pool.GetUseCount() == 1 && pool.GetReserveCount() == 0);
 
 	// 4) 다시 돌려놓는다. 풀 소멸자가 풀 안의 블록을 해제한다
-	MemoryHeader::AttachHeader(second, blockSize);
-	pool.Push(second);
+	MemoryHeader::AttachHeader(pSecond, blockSize);
+	pool.Push(pSecond);
 
 	if (aligned == false || countAfterPop == false || countAfterPush == false || reused == false || countAfterReuse == false)
 	{
@@ -510,21 +510,21 @@ void MemoryPoolConcurrent()
 
 				for (int32 i = 0; i < REPEAT_COUNT; ++i)
 				{
-					MemoryHeader* block = pool.Pop();
-					int8* bytes = static_cast<int8*>(MemoryHeader::AttachHeader(block, blockSize));
+					MemoryHeader* pBlock = pool.Pop();
+					int8* pBytes = static_cast<int8*>(MemoryHeader::AttachHeader(pBlock, blockSize));
 
 					for (int32 j = 0; j < DATA_SIZE; ++j)
-						bytes[j] = mark;
+						pBytes[j] = mark;
 					for (int32 j = 0; j < DATA_SIZE; ++j)
 					{
-						if (bytes[j] != mark)
+						if (pBytes[j] != mark)
 						{
 							badDataCount.fetch_add(1);
 							break;
 						}
 					}
 
-					pool.Push(MemoryHeader::DetachHeader(bytes));
+					pool.Push(MemoryHeader::DetachHeader(pBytes));
 				}
 			});
 	}
@@ -549,12 +549,12 @@ void CrashMemoryPoolDoublePush()
 	const int32 blockSize = static_cast<int32>(sizeof(MemoryHeader)) + 64;
 	MemoryPool pool(blockSize);
 
-	MemoryHeader* block = pool.Pop();
-	void* data = MemoryHeader::AttachHeader(block, blockSize);
-	pool.Push(MemoryHeader::DetachHeader(data));
+	MemoryHeader* pBlock = pool.Pop();
+	void* pData = MemoryHeader::AttachHeader(pBlock, blockSize);
+	pool.Push(MemoryHeader::DetachHeader(pData));
 
-	// 이미 풀에 있는 블록(allocSize_ == 0)을 또 넣는다 → Push의 ASSERT_CRASH(ptr->allocSize_ > 0)
-	pool.Push(block);
+	// 이미 풀에 있는 블록(allocSize_ == 0)을 또 넣는다 → Push의 ASSERT_CRASH(pPtr->allocSize_ > 0)
+	pool.Push(pBlock);
 
 	std::cout << "[CrashMemoryPoolDoublePush] FAIL : 크래시가 나지 않았다" << std::endl;
 }

@@ -30,11 +30,11 @@ class Lock
 	};
 
 public:
-	void WriteLock(const char* name);
-	void WriteUnlock(const char* name);
+	void WriteLock(const char* pName);
+	void WriteUnlock(const char* pName);
 
-	void ReadLock(const char* name);
-	void ReadUnlock(const char* name);
+	void ReadLock(const char* pName);
+	void ReadUnlock(const char* pName);
 
 private:
 	// [WWWWWWWWWWWWWWWW][RRRRRRRRRRRRRRRR]
@@ -54,8 +54,8 @@ private:
 class ReadLockGuard
 {
 public:
-	ReadLockGuard(Lock& lock, const char* name) : lock_(lock), name_(name) { lock_.ReadLock(name_); }
-	~ReadLockGuard() { lock_.ReadUnlock(name_); }
+	ReadLockGuard(Lock& lock, const char* pName) : lock_(lock), pName_(pName) { lock_.ReadLock(pName_); }
+	~ReadLockGuard() { lock_.ReadUnlock(pName_); }
 
 	// 복사되면 Unlock이 두 번 호출된다
 	ReadLockGuard(const ReadLockGuard&) = delete;
@@ -63,21 +63,21 @@ public:
 
 private:
 	Lock& lock_;
-	const char* name_;
+	const char* pName_;
 };
 
 class WriteLockGuard
 {
 public:
-	WriteLockGuard(Lock& lock, const char* name) : lock_(lock), name_(name) { lock_.WriteLock(name_); }
-	~WriteLockGuard() { lock_.WriteUnlock(name_); }
+	WriteLockGuard(Lock& lock, const char* pName) : lock_(lock), pName_(pName) { lock_.WriteLock(pName_); }
+	~WriteLockGuard() { lock_.WriteUnlock(pName_); }
 
 	WriteLockGuard(const WriteLockGuard&) = delete;
 	WriteLockGuard& operator=(const WriteLockGuard&) = delete;
 
 private:
 	Lock& lock_;
-	const char* name_;
+	const char* pName_;
 };
 
 
@@ -85,7 +85,7 @@ private:
 /*
 		[Lock 매크로]
 		클래스 멤버로 USE_LOCK을 선언하고, 멤버 함수 안에서 READ_LOCK / WRITE_LOCK을 쓴다.
-		name은 typeid(this).name()으로 클래스 이름이 자동으로 들어간다.
+		pName은 typeid(this).name()으로 클래스 이름이 자동으로 들어간다.
 		⚠️ 같은 스코프에서 READ_LOCK 다음에 WRITE_LOCK을 쓰면 Read → Write 셀프 데드락 (타임아웃 크래시)
 */
 #define USE_MANY_LOCKS(count)   Lock locks_[count];

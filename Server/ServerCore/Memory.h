@@ -32,21 +32,22 @@ Type* xnew(Args&&... args)
 	STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
 
 	// ① 메모리만 확보
-	Type* memory = static_cast<Type*>(DefaultAllocator::Alloc(static_cast<int32>(sizeof(Type))));
+	Type* pMemory = static_cast<Type*>(DefaultAllocator::Alloc(static_cast<int32>(sizeof(Type))));
 
 	// ② 확보한 주소 위에서 생성자만 호출 (placement new). 인자는 받은 그대로 전달한다
-	new(memory) Type(std::forward<Args>(args)...);
-	return memory;
+	new(pMemory) Type(std::forward<Args>(args)...);
+	return pMemory;
 }
 
 template<typename Type>
-void xdelete(Type* obj)
+void xdelete(Type* pObj)
 {
 	// delete nullptr과 같이 아무 일도 하지 않는다
-	if (obj == nullptr)
+	if (pObj == nullptr)
 		return;
 
 	// ① 소멸자를 직접 호출  ② 메모리 반납
-	obj->~Type();
-	DefaultAllocator::Release(obj);
+	pObj->~Type();
+	DefaultAllocator::Release(pObj);
 }
+

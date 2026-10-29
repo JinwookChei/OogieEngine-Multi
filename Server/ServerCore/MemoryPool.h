@@ -25,22 +25,22 @@ struct alignas(SLIST_ALIGNMENT) MemoryHeader : public SLIST_ENTRY
 	explicit MemoryHeader(int32 size) : allocSize_(size) {}
 
 	// 블록 시작 주소에 헤더를 만들고, 헤더 바로 뒤(데이터 시작) 주소를 돌려준다
-	static void* AttachHeader(MemoryHeader* header, int32 size)
+	static void* AttachHeader(MemoryHeader* pHeader, int32 size)
 	{
-		new(header) MemoryHeader(size);   // 메모리는 이미 있으므로 생성자만 호출 (placement new)
-		return header + 1;                // MemoryHeader 1개(= sizeof(MemoryHeader) 바이트) 뒤
+		new(pHeader) MemoryHeader(size);   // 메모리는 이미 있으므로 생성자만 호출 (placement new)
+		return pHeader + 1;                // MemoryHeader 1개(= sizeof(MemoryHeader) 바이트) 뒤
 	}
 
 	// 데이터 주소에서 MemoryHeader 1개만큼 앞으로 돌아가 헤더를 되찾는다
-	static MemoryHeader* DetachHeader(void* ptr)
+	static MemoryHeader* DetachHeader(void* pPtr)
 	{
-		return static_cast<MemoryHeader*>(ptr) - 1;
+		return static_cast<MemoryHeader*>(pPtr) - 1;
 	}
 
 	int32 allocSize_ = 0;
 };
 
-// 데이터 시작 주소(header + 1)도 16바이트 정렬이 되려면 헤더 크기가 16의 배수여야 한다
+// 데이터 시작 주소(pHeader + 1)도 16바이트 정렬이 되려면 헤더 크기가 16의 배수여야 한다
 STATIC_ASSERT(sizeof(MemoryHeader) % SLIST_ALIGNMENT == 0, "MemoryHeader size must be a multiple of SLIST_ALIGNMENT");
 
 
@@ -59,7 +59,7 @@ public:
 	~MemoryPool();
 
 	// 사용하는 쪽에서 AttachHeader로 헤더를 붙인 블록만 받는다
-	void Push(MemoryHeader* ptr);
+	void Push(MemoryHeader* pPtr);
 
 	// 헤더가 아직 붙지 않은 블록을 돌려준다 (사용하는 쪽에서 AttachHeader)
 	MemoryHeader* Pop();

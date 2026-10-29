@@ -9,9 +9,9 @@ void* BaseAllocator::Alloc(int32 size)
 	return ::malloc(size);
 }
 
-void BaseAllocator::Release(void* ptr)
+void BaseAllocator::Release(void* pPtr)
 {
-	::free(ptr);
+	::free(pPtr);
 }
 
 
@@ -30,25 +30,25 @@ void* StompAllocator::Alloc(int32 size)
 	const int32 offset = totalSize - alignedSize;
 
 	// ⑤ 페이지 단위로 메모리를 받는다
-	void* base = ::VirtualAlloc(nullptr, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
-	ASSERT_CRASH(base != nullptr);
+	void* pBase = ::VirtualAlloc(nullptr, totalSize, MEM_RESERVE | MEM_COMMIT, PAGE_READWRITE);
+	ASSERT_CRASH(pBase != nullptr);
 
 	// ⑥ 데이터 끝이 페이지 끝에 오도록 offset만큼 뒤의 주소를 돌려준다
-	return static_cast<int8*>(base) + offset;
+	return static_cast<int8*>(pBase) + offset;
 }
 
-void StompAllocator::Release(void* ptr)
+void StompAllocator::Release(void* pPtr)
 {
-	if (ptr == nullptr)
+	if (pPtr == nullptr)
 		return;
 
 	// 4KB 경계에서 얼마나 떨어져 있는지 (= Alloc의 offset)
-	const uintptr remainder = reinterpret_cast<uintptr>(ptr) % PAGE_SIZE;
+	const uintptr remainder = reinterpret_cast<uintptr>(pPtr) % PAGE_SIZE;
 
-	// 그만큼 앞으로 돌아가면 VirtualAlloc이 돌려준 base
-	void* base = static_cast<int8*>(ptr) - remainder;
+	// 그만큼 앞으로 돌아가면 VirtualAlloc이 돌려준 pBase
+	void* pBase = static_cast<int8*>(pPtr) - remainder;
 
 	// 할당된 크기는 OS가 기억하고 있으므로 2번째 인자 무조건 0 이어야 한다.
-	BOOL res = ::VirtualFree(base, 0, MEM_RELEASE);
+	BOOL res = ::VirtualFree(pBase, 0, MEM_RELEASE);
 	ASSERT_CRASH(res);
 }

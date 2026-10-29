@@ -7,10 +7,10 @@
 #include "DeadLockProfiler.h"
 
 
-void Lock::WriteLock(const char* name)
+void Lock::WriteLock(const char* pName)
 {
 #ifdef _DEBUG
-	GDeadLockProfiler->PushLock(name);
+	GDeadLockProfiler->PushLock(pName);
 #endif // DEBUG
 
 	// 0은 EMPTY_FLAG의 소유자 값과 같다 → InitTLS 안 된 스레드가 재진입으로 오인해 락을 그냥 통과한다
@@ -50,10 +50,10 @@ void Lock::WriteLock(const char* name)
 	}
 }
 
-void Lock::WriteUnlock(const char* name)
+void Lock::WriteUnlock(const char* pName)
 {
 #ifdef _DEBUG
-	GDeadLockProfiler->PopLock(name);
+	GDeadLockProfiler->PopLock(pName);
 #endif // DEBUG
 
 	// 내가 잡은 락만 풀 수 있다
@@ -111,10 +111,10 @@ void Lock::WriteUnlock(const char* name)
 	그냥 fetch_add(1)을 쓰지 않고 CAS  . "Write 소유자가 없는지 확인"과
 	"+1"을 한 번에 원자적으로 처리해야 하기 때문입니다. fetch_add는 조건 없이 무조건 더하므로, Write 중에도 Read 카운트를 올려 버립니다.
 */
-void Lock::ReadLock(const char* name)
+void Lock::ReadLock(const char* pName)
 {
 #ifdef _DEBUG
-	GDeadLockProfiler->PushLock(name);
+	GDeadLockProfiler->PushLock(pName);
 #endif // DEBUG
 
 	ASSERT_CRASH(LThreadId != 0 && LThreadId <= 0xFFFF);
@@ -146,10 +146,10 @@ void Lock::ReadLock(const char* name)
 	}
 }
 
-void Lock::ReadUnlock(const char* name)
+void Lock::ReadUnlock(const char* pName)
 {
 #ifdef _DEBUG
-	GDeadLockProfiler->PopLock(name);
+	GDeadLockProfiler->PopLock(pName);
 #endif // DEBUG
 
 	// fetch_sub은 빼기 전 값을 돌려준다 → 이미 0이었다면 Lock보다 Unlock을 더 많이 호출한 것

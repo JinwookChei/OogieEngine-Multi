@@ -27,11 +27,11 @@
 //   ※ 매크로의 줄 끝 '\' 뒤에는 공백이 있으면 안 된다. (있으면 매크로가 그 줄에서 끝나 버림)
 #define CRASH(cause)										\
 	do {													\
-		const char* volatile crashCause = (cause);			\
-		(void)crashCause;									\
-		volatile uint32* crash = nullptr;					\
-		__analysis_assume(crash != nullptr);				\
-		*crash = 0xDEADBEEF;								\
+		const char* volatile pCrashCause = (cause);			\
+		(void)pCrashCause;									\
+		volatile uint32* pCrash = nullptr;					\
+		__analysis_assume(pCrash != nullptr);				\
+		*pCrash = 0xDEADBEEF;								\
 	} while (0)
 
 

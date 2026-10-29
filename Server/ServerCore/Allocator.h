@@ -10,7 +10,7 @@ class BaseAllocator
 {
 public:
 	static void* Alloc(int32 size);
-	static void Release(void* ptr);
+	static void Release(void* pPtr);
 };
 
 /*
@@ -68,7 +68,7 @@ public:
 		  메모리 모양:
 		  0x...0000                                  0x...0FF0           0x...1000
 		     |<---------- 빈 공간 4080B (안 씀) --------->|<------ 16B ------>|<-- 미할당 주소 (접근 = 즉시 크래시)
-		     |                                            | knight 8B | 여분 8B |
+		     |                                            | pKnight 8B | 여분 8B |
 		     ^ base (VirtualAlloc 반환값)                  ^ Alloc 반환값
 
 		  - knight는 0FF0 ~ 0FF7을 쓴다.
@@ -130,7 +130,7 @@ public:
 		해제 후 접근 (Use-After-Free)
 		  1. Release → VirtualFree(MEM_RELEASE)
 		  2. OS가 페이지 테이블에서 그 페이지를 지운다
-		  3. 코드가 knight->hp_ = 50; 실행
+		  3. 코드가 pKnight->hp_ = 50; 실행
 		  4. CPU(MMU)가 주소 변환 시도 → 페이지 테이블에 없음 → 페이지 폴트
 		  5. OS: "이 주소는 이 프로세스에 할당된 적 없음" → EXCEPTION_ACCESS_VIOLATION
 		  6. 디버거가 정확히 hp_ = 50 줄에서 멈춤
@@ -168,7 +168,7 @@ public:
 	static void* Alloc(int32 size);
 
 	// Alloc이 돌려준 주소만 받는다. nullptr이면 아무 일도 하지 않는다
-	static void Release(void* ptr);
+	static void Release(void* pPtr);
 
 private:
 	// VirtualAlloc의 할당 단위 (x64 Windows 페이지 크기)

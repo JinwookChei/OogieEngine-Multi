@@ -17,11 +17,11 @@
 class DeadLockProfiler
 {
 public:
-	void PushLock(const char* name);
-	void PopLock(const char* name);
+	void PushLock(const char* pName);
+	void PopLock(const char* pName);
 
 private:
-	int32 GetOrCreateLockId(const char* name);
+	int32 GetOrCreateLockId(const char* pName);
 	void CheckCycle();
 	void Dfs(int32 cur);
 
