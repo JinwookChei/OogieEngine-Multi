@@ -11,32 +11,27 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 Step 3-2 `MemoryPool` 완료** (커밋/push 완료). 다음: **Step 4 `Memory`(크기별 풀 테이블) + `PoolAllocator`** 안내부터 |
-| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) |
-| 마지막 작업 | 2026-10-28 — Step 3-2 MemoryPool 구현 + 테스트 3개 (`MemoryPoolReuse`, `MemoryPoolConcurrent`, `CrashMemoryPoolDoublePush`), 학습 정리에 SLIST_ENTRY/SLIST_HEADER/ABA/구조 그림 추가 |
-| 남은 숙제 | Step 4-1 `Memory` 작성 중 (안내 완료, 2026-10-28) |
+| 현재 위치 | **Phase 1-3 Step 4-2 `PoolAllocator` 완료** (Step 4-1과 함께 커밋 완료, push 전). 다음: **`MakeShared`** 안내부터 |
+| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) / Step 4-1 (Memory, GMemory) / Step 4-2 (PoolAllocator, Release의 `DefaultAllocator` 교체) |
+| 마지막 작업 | 2026-10-31 — Step 4-1 Memory 구현 + 테스트 4개 (`MemoryAllocReuse`, `MemoryBoundarySizes`, `MemoryConcurrent`, `CrashMemoryDoubleRelease`), Step 4-2 PoolAllocator + 테스트 2개 (`PoolAllocatorAllocFree`, `XnewPoolReuse`), 확인 질문 6개 정리 |
+| 남은 숙제 | `feature/phase1-servercore` push (2026-10-31 기준 로컬 커밋만 있음. 다른 PC에서 이어가려면 먼저 push) |
 
 **확인 질문 (미답변)**
 - 없음. Phase 1-2 Step 3~6, Phase 1-3 Step 1~2의 미답변 질문은 2026-10-28 사용자 요청으로 Claude가 해설을 채움 (학습 정리 문서의 `💬 (해설 요청)`)
-- Phase 1-3 Step 4-1 `Memory`: ① `Allocate(40)` / `Allocate(4081)`의 경로 ② 이중 Release를 `blockSize > 0` 검사가 항상 잡는가
 
 **테스트 현황** (`GameServer/Test.cpp`, Step 4·6에서 사용자 요청으로 Claude가 작성)
-- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete`, `StompAllocFree`, `MemoryHeaderAttachDetach`, `MemoryPoolReuse`, `MemoryPoolConcurrent` → Debug/Release 모두 통과
+- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete`, `StompAllocFree`, `MemoryHeaderAttachDetach`, `MemoryPoolReuse`, `MemoryPoolConcurrent`, `MemoryAllocReuse`, `MemoryBoundarySizes`, `MemoryConcurrent`, `PoolAllocatorAllocFree` → Debug/Release 모두 통과. `XnewPoolReuse` → Release 통과, Debug는 SKIP
 - `CrashStompUseAfterFree`(Debug만 AV), `CrashStompOverflow`(Debug/Release 모두 AV) → 사용자 확인 완료 (2026-10-27)
 - `CrashMemoryPoolDoublePush`(ASSERT_CRASH, Debug/Release) → 사용자 확인 완료 (2026-10-28)
+- `CrashMemoryDoubleRelease`(ASSERT_CRASH) → 사용자 확인 완료 (2026-10-31)
 - `CrashDeadLockCycle` → Debug에서 `DEADLOCK: Cycle_R -> Cycle_P` 출력 후 크래시, Release는 FAIL 출력 (Claude가 확인)
 - 크래시 (F5로 하나씩): `CrashInvalidUnlockOrder`(INVALID_UNLOCK_ORDER), `CrashUnknownLock`(UNKNOWN_LOCK), `CrashThreadIdZero`(ASSERT_CRASH LThreadId) → 사용자 확인 완료 (2026-10-24). Release에서는 Profiler 2개가 FAIL 출력이 정상
 - 사소함: `#endif // DEBUG` → `// _DEBUG`, `CoreTLS.h` 주석 스페이스 들여쓰기, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음)
 
 **다음에 할 일**
 0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`)
-1. **Phase 1-3 Step 4 `Memory` + `PoolAllocator`** (Claude가 Step 형식으로 안내 → 사용자 작성 → 리뷰)
-   - `Memory` 클래스: 크기별 `MemoryPool` 테이블 (예: 32~1024는 32 단위, ~2048은 128 단위, ~4096은 256 단위), 크기 → 풀 조회 테이블, 최대 크기(4096) 초과는 `_aligned_malloc` 직행. `GMemory`를 `CoreGlobal`에서 생성
-   - `Allocate(size)`: 블록 크기 = size + `sizeof(MemoryHeader)` → 풀 Pop → `AttachHeader(블록, 블록 크기)` (헤더의 `allocSize_` = **헤더 포함 블록 크기**로 확정)
-   - `Release(ptr)`: `DetachHeader` → `allocSize_`로 풀 선택 → Push (0이면 이중 해제)
-   - `PoolAllocator` → Release 빌드의 `DefaultAllocator`를 `BaseAllocator`에서 `PoolAllocator`로 교체 (Debug는 Stomp 유지)
-   - 확인 질문 2개, 테스트 이름은 안내할 때 먼저 정한다
-2. 이후: `MakeShared` → `StlAllocator` + `Container.h` → `ObjectPool<T>` → Phase 1-3 끝나면 README 전체 그림 갱신
+1. **Phase 1-3 `MakeShared`** (Claude가 Step 형식으로 안내 → 사용자 작성 → 리뷰). 확인 질문 2개, 테스트 이름은 안내할 때 먼저 정한다
+2. 이후: `StlAllocator` + `Container.h` → `ObjectPool<T>` → Phase 1-3 끝나면 README 전체 그림 갱신
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각. **사용자가 "테스트를 작성해 달라"고 요청하면** Claude가 작성하고 Debug/Release 빌드·실행으로 확인한다 (Step 2, 3-1, 3-2는 요청으로 Claude가 작성). 지시할 때는 **테스트 함수 이름과 보조 클래스 이름을 먼저 정해서** 준다. 정상 테스트는 `main`에서 항상 켜 두고, 크래시 테스트(`Crash` 접두사)만 주석으로 둔다. 테스트는 값을 출력만 하지 않고 코드가 비교해서 `OK`/`FAIL`을 낸다.
 
@@ -149,10 +144,12 @@ Phase 9  포트폴리오 정리
 ### 1-3. 메모리
 - [x] Step 1 `BaseAllocator` + `xnew`/`xdelete` (`Memory.h`, placement new, 완벽 전달) — 🔧 nullptr 검사, 정렬 `STATIC_ASSERT`, 테스트 `XnewXdelete`
 - [x] Step 2 `StompAllocator` (VirtualAlloc, 페이지 끝 배치, 16바이트 정렬) + `Memory.h` `DefaultAllocator`(Debug만 Stomp) — 🔧 강의 결함 #5, 테스트 `StompAllocFree` / `CrashStompUseAfterFree` / `CrashStompOverflow`
-- [ ] `PoolAllocator` / `StlAllocator`
+- [x] Step 4-2 `PoolAllocator` (Release의 `DefaultAllocator` 교체, Debug는 Stomp 유지) — 🔧 `nullptr` 해제 규칙 통일, 테스트 `PoolAllocatorAllocFree` / `XnewPoolReuse`
+- [ ] `StlAllocator`
 - [x] Step 3-1 `MemoryHeader` (`MemoryPool.h`, SLIST_ENTRY 상속, 16바이트 정렬 `STATIC_ASSERT`, 내부 전용 헤더) — 테스트 `MemoryHeaderAttachDetach`
 - [x] Step 3-2 `MemoryPool` (SLIST lock-free Push/Pop, 사용/예약 카운트) — 🔧 이중 Push 검사, 테스트 `MemoryPoolReuse` / `MemoryPoolConcurrent` / `CrashMemoryPoolDoublePush`
-- [ ] `Memory` (32~4096 크기별 풀 테이블), `xnew` / `xdelete` / `MakeShared`
+- [x] Step 4-1 `Memory` (32~4096 크기별 풀 테이블, 큰 블록 직접 할당, `GMemory`) — 🔧 `size` 범위 검사, 이중 해제 검사, 테스트 `MemoryAllocReuse` / `MemoryBoundarySizes` / `MemoryConcurrent` / `CrashMemoryDoubleRelease`
+- [ ] `MakeShared`
 - [ ] `ObjectPool<T>`
 - [ ] `Container.h` (`Vector`, `Map`, `HashMap`, `Queue`, `String` ...)
 - [x] 테스트: Stomp 모드에서 해제 후 접근(Use-After-Free) 시 즉시 크래시 확인

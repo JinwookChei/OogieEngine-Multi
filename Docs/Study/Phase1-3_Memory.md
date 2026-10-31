@@ -746,3 +746,206 @@ MemoryHeader* MemoryPool::Pop()
 
 **Q2. `MemoryPoolConcurrent`가 끝난 뒤 reserve가 최대 4인 이유는?**
 > 💬 (모르겠다 → 해설) 새 블록은 **풀이 비었을 때만** 만들어진다. 각 스레드는 Pop → 사용 → Push라 동시에 1개만 들고 있으므로, 밖에 나가 있는 블록은 최대 4개다. 5번째를 만들려면 4개가 밖에 있는 상태에서 또 Pop해야 하는데 그럴 스레드가 없다. 반복이 많아 4개가 동시에 나가는 순간이 거의 확실히 생겨 매번 4가 나왔지만, 스레드가 겹치지 않으면 1~3도 가능해서 판정은 1~4로 한다. → **풀의 크기 = 동시 사용 최대 개수**.
+
+---
+
+## Step 4-1. Memory
+
+### 🎯 목표
+크기만 받아서 알맞은 풀을 바로 찾아 할당·해제하는 `Memory`를 만든다. 전역 `GMemory`로 어디서나 쓸 수 있게 한다.
+
+### 📖 개념 1 — 크기가 곧 번호인 안내표
+`poolTable_`은 **크기가 곧 번호인 사물함 안내표**다. 풀을 반복문으로 찾지 않고 `poolTable_[blockSize]` 한 번으로 찾는다.
+
+```
+poolTable_ [1 ... 32]      → 32 풀
+           [33 ... 64]     → 64 풀
+           ...
+           [3841 ... 4096] → 4096 풀
+블록 크기 > 4096           → 풀을 거치지 않음 (_aligned_malloc / _aligned_free)
+```
+
+| 블록 크기 | 풀 간격 | 풀 개수 |
+|---|---|---|
+| 32 ~ 1024 | 32 | 32개 |
+| 1152 ~ 2048 | 128 | 8개 |
+| 2304 ~ 4096 | 256 | 8개 |
+
+> 💡 `AddPool`에 넘기는 값은 범위의 시작이 아니라 **풀 블록의 크기, 즉 담당 범위의 끝**이다. 범위의 시작은 `직전 풀 크기 + 1`로 `AddPool`이 계산한다.
+
+### 📖 개념 2 — 분기 기준은 size가 아니라 blockSize
+호출자는 `size`만 말하지만 실제로는 헤더 자리까지 필요하다.
+
+```
+[MemoryHeader][      Data (size 바이트)      ]
+^ 블록 시작    ^ 호출자가 받는 주소
+|<------------- blockSize ------------------>|
+```
+
+`sizeof(MemoryHeader)`는 16이다 (테스트 출력으로 확인). 그래서 호출자가 4096을 요청해도 풀 밖으로 가고, 풀에 들어가는 가장 큰 요청은 4080이다.
+
+### 🧱 핵심 코드
+```cpp
+void* Memory::Allocate(int32 size)
+{
+	ASSERT_CRASH(size > 0);
+	const int32 headerSize = static_cast<int32>(sizeof(MemoryHeader));
+	ASSERT_CRASH(size <= INT32_MAX - headerSize);
+
+	MemoryHeader* pHeader = nullptr;
+	int32 blockSize = size + headerSize;
+
+	// 풀 크기를 넘는 블록은 직접 할당한다.
+	if (blockSize > MAX_ALLOC_SIZE)
+	{
+		// 데이터 주소의 16바이트 정렬을 지키려고 같은 정렬로 받는다
+		pHeader = static_cast<MemoryHeader*>(::_aligned_malloc(blockSize, SLIST_ALIGNMENT));
+		ASSERT_CRASH(pHeader != nullptr);
+	}
+	else
+	{
+		pHeader = poolTable_[blockSize]->Pop();
+	}
+
+	return MemoryHeader::AttachHeader(pHeader, blockSize);
+}
+
+void Memory::Release(void* pPtr)
+{
+	ASSERT_CRASH(pPtr != nullptr);
+
+	MemoryHeader* pHeader = MemoryHeader::DetachHeader(pPtr);
+	int32 blockSize = pHeader->allocSize_;
+	ASSERT_CRASH(blockSize > 0);
+
+	// Allocate와 같은 기준으로 경로를 고른다. 할당한 곳으로 돌려줘야 한다
+	if (blockSize > MAX_ALLOC_SIZE)
+	{
+		// _aligned_malloc이 준 주소는 데이터가 아니라 헤더 주소다
+		::_aligned_free(pHeader);
+	}
+	else
+	{
+		poolTable_[blockSize]->Push(pHeader);
+	}
+}
+```
+
+> ⚠️ `GMemory`는 `CoreGlobal`에서 **가장 먼저 만들고 가장 나중에 지운다.** 워커 스레드는 `ThreadManager` 소멸자의 `Join`으로 끝나므로, 그 뒤에 지워야 해제된 `Memory`에 접근하지 않는다.
+
+### 🔧 강의와 다른 점
+| 변경 | 이유 |
+|---|---|
+| `allocSize_`에 헤더 포함 블록 크기를 저장 | 풀과 분기가 쓰는 값과 같아서, `Release`에서 계산을 다시 하지 않는다 |
+| `Release`에서 `blockSize > 0` 검사 | 0이면 `poolTable_[0]`이 `nullptr`이므로 표를 읽기 전에 멈춘다 |
+| `size` 범위 검사 (덧셈 전에) | `int32` 덧셈 넘침 방지 |
+| 생성자 끝에서 마지막 풀 크기 검사 | 풀 개수가 맞아도 표에 빈칸이 생기는 실수를 잡는다 |
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| 풀 시작값을 1, 1025, 2049로 설정 | 블록 크기 1은 생성자 ASSERT에 걸리고, 마지막 풀이 3841이 되어 `poolTable_[3842~4096]`이 `nullptr` | 넘기는 값은 범위의 시작이 아니라 풀 크기(범위의 끝). 개수뿐 아니라 마지막 풀까지 검사한다 |
+| `void* _aligned_malloc(...)` | 호출이 아니라 변수 선언으로 해석되어 빌드 실패 | 앞에 타입을 쓰면 선언이다 |
+| `AttachHeader` 없이 `pHeader` 반환 | 호출자가 헤더를 덮어쓰고 `allocSize_`도 기록되지 않음 | 호출자에게는 헤더 뒤 주소를 준다 |
+| `Release`에서 `sizeof(MemoryHeader)`를 또 더함 | 다른 풀로 반납되거나 표 범위를 넘음 | `allocSize_`에는 이미 헤더가 포함되어 있다 |
+| `Release`에 큰 블록 경로가 없음 | 직접 할당한 블록이 표 범위 밖을 읽음 | 할당 경로와 해제 경로는 항상 짝을 맞춘다 |
+| `GMemory`를 가장 먼저 삭제 | 워커가 해제된 `Memory`에 접근할 수 있음 | 다른 것이 의존하는 객체는 마지막에 지운다 |
+| (Claude) 풀 범위를 "49~64번"으로 잘못 설명 | 설명이 코드와 달라짐 | 정확한 범위는 33~64번 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `MemoryAllocReuse` | 100바이트 할당 → 16바이트 정렬, 헤더의 블록 크기 → 해제 후 재할당이 같은 주소 | `OK` (Debug/Release) |
+| `MemoryBoundarySizes` | 1, 1024, 4080, 4081, 4096, 5000바이트의 정렬, 전체 읽기/쓰기, 헤더 보존 | `OK` (Debug/Release) |
+| `MemoryConcurrent` | 스레드 4개가 크기 5종을 함께 들고 2,000번 할당/해제, 값이 섞이지 않음 | `OK` (Debug/Release) |
+| `CrashMemoryDoubleRelease` | 100바이트를 두 번 `Release` | `ASSERT_CRASH(blockSize > 0)` 크래시 (사용자 확인) |
+
+> 📝 2026-10-31: 정상 테스트 통과, 크래시 테스트 직접 확인. 테스트 코드는 사용자 요청으로 Claude가 작성했다.
+
+### 🧩 복습 질문
+**Q1. `Allocate(40)`과 `Allocate(4081)`은 각각 어떤 경로로 가나?**
+> ✅ 내 답: `Allocate(40)` → 36, `Allocate(4081)` → 메모리풀 밖.
+> 💬 보충: 4081은 맞다. 4081 + 16 = 4097 > 4096이므로 `_aligned_malloc`으로 간다. 40은 36이 아니다. 헤더는 빼지 않고 더하므로 블록 크기는 40 + 16 = 56이고, 33~64번 칸이 가리키는 **64 풀**로 간다. 남는 8바이트는 풀 크기에 맞추면서 생기는 낭비다.
+
+**Q2. 이중 `Release`를 `blockSize > 0` 검사가 항상 잡나?**
+> ✅ 내 답: 풀 경로는 잡지만 큰 블록 경로는 못 잡는다.
+> 💬 보충: 큰 블록은 첫 `Release`에서 메모리가 해제되므로, 두 번째 `Release`가 헤더를 읽는 것 자체가 Use-After-Free다. 풀 경로도 **블록이 풀에 있는 동안만** 잡는다. 두 `Release` 사이에 다른 `Allocate`가 그 블록을 꺼내 가면 `allocSize_`가 다시 양수가 되어 검사를 통과하고, 남의 블록을 반납하게 된다. 그래서 "항상"은 아니다.
+
+**Q3. `allocSize_`에 풀 크기(64)가 아니라 블록 크기(50)를 적어도 `Release`가 맞는 풀을 찾는 이유는?**
+> ✅ 내 답: `AddPool`할 때 풀 크기 단위로 바뀌어서 저장하기 때문에.
+> 💬 보충: 방향은 맞다. 다만 값이 바뀌어 저장되는 것은 아니고 `allocSize_`는 50 그대로다. `AddPool`이 33~64번 칸을 **모두 같은 64 풀로** 채워 두었기 때문에, `poolTable_[50]`과 `poolTable_[64]`가 같은 풀이다.
+
+**Q4. 큰 블록 경로에서 `_aligned_malloc` 대신 `malloc`을 쓰면 `Release` 쪽에서 어떤 문제가 생기나?**
+> 💬 (모르겠다 → 해설) `Release`의 `_aligned_free`와 짝이 맞지 않는다. `_aligned_malloc`은 정렬용 여유 공간에 원래 할당 주소 정보를 함께 두고, `_aligned_free`는 그 정보를 읽어 해제한다. `malloc`으로 받은 블록에는 그 정보가 없으므로 잘못된 주소를 해제해 크래시나 힙 손상이 생긴다. → **할당 함수와 해제 함수는 항상 짝을 맞춘다.**
+
+---
+
+## Step 4-2. PoolAllocator
+
+### 🎯 목표
+`GMemory`를 다른 할당기와 같은 모양으로 감싸고, Release 빌드의 `xnew`/`xdelete`가 풀을 쓰게 바꾼다.
+
+### 📖 개념 — 상속 없이 모양만 맞춘 어댑터
+`xnew`는 `DefaultAllocator::Alloc`, `DefaultAllocator::Release`만 호출한다. `PoolAllocator`는 `Memory`를 이 모양에 맞춰 주는 어댑터다.
+
+```
+xnew → DefaultAllocator ─ Debug   → StompAllocator
+                        └ Release → PoolAllocator → GMemory → 풀 / 큰 블록
+```
+
+세 할당기는 상속 관계가 아니다. 함수가 `static`이고 할당기를 컴파일할 때 별칭으로 고르므로, `virtual` 호출 비용 없이 함수 이름과 모양만 맞으면 된다. 모양이 어긋나면 컴파일 오류로 잡힌다.
+
+> 💡 교체는 별칭 한 줄로 끝난다. Step 1에서 할당기 선택을 `DefaultAllocator` 한 곳에 모아 둔 덕분이다.
+
+### 🧱 핵심 코드
+```cpp
+void* PoolAllocator::Alloc(int32 size)
+{
+	return GMemory->Allocate(size);
+}
+
+void PoolAllocator::Release(void* pPtr)
+{
+	if (pPtr == nullptr)
+		return;
+
+	GMemory->Release(pPtr);
+}
+```
+
+```cpp
+#ifdef _DEBUG
+using DefaultAllocator = StompAllocator;
+#else
+using DefaultAllocator = PoolAllocator;
+#endif
+```
+
+### 🔧 강의와 다른 점
+| 변경 | 이유 |
+|---|---|
+| `xnew`/`xdelete`가 `DefaultAllocator`를 호출 | 빌드 구성별 할당기를 한 곳에서 고른다. Debug는 Stomp로 메모리 오류를 잡고, Release는 풀로 빠르게 동작한다 |
+| `PoolAllocator::Release`의 `nullptr` 검사 | 별칭으로 바꿔 끼우는 다른 할당기와 규칙을 맞춘다 |
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| 내용 없는 `private:`, 역할 주석 없음, 옛 문구 남음 | 코드와 주석이 달라짐 | 동작을 바꾸면 그 동작을 설명하는 주석과 테스트 문구도 함께 찾아 고친다 |
+| (Claude) `MemoryPool.h`의 정렬 이유를 16바이트 비교교환 요구사항으로 설명 | 블록 정렬의 실제 이유와 다름 | 블록은 `SLIST_HEADER`가 주소 끝 4비트를 저장하지 않기 때문에 16의 배수여야 한다 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `PoolAllocatorAllocFree` | 16바이트 정렬, 읽기/쓰기, 재할당 시 같은 주소, `nullptr` 해제 | `OK` (Debug/Release) |
+| `XnewPoolReuse` | `xnew` → `xdelete` → `xnew`가 같은 주소, 생성자 값 전달 | Release `OK`, Debug `SKIP` |
+
+> 📝 2026-10-31: 코드 정리와 테스트는 사용자 요청으로 Claude가 작성했다.
+
+### 🧩 복습 질문
+**Q1. 전역 객체의 생성자에서 `CoreGlobal` 생성보다 먼저 `xnew`를 호출하면 Debug와 Release의 결과가 어떻게 다른가?**
+> ✅ 내 답: 크래시가 발생한다.
+> 💬 보충: **Release만 크래시가 난다.** Release의 `PoolAllocator`는 아직 `nullptr`인 `GMemory`를 쓰기 때문이다. Debug의 `StompAllocator`는 `GMemory` 없이 `VirtualAlloc`을 직접 쓰므로 통과한다. 그래서 Debug에서 문제가 안 보이다가 Release에서만 터지는 버그가 된다. `CoreGlobal`이 사라진 뒤의 `xdelete`도 같다. → **`xnew`/`xdelete`는 `CoreGlobal`이 살아 있는 동안에만 쓴다.**
+
+**Q2. Release 빌드에서 `CrashStompUseAfterFree`를 실행하면 크래시가 나나? `BaseAllocator`일 때와 비교해 해제 후 접근의 위험이 어떻게 달라지나?**
+> ✅ 내 답: 크래시가 나지 않는다.
+> 💬 보충: 맞다. 후반부는 미답변이어서 해설을 붙인다. 풀은 블록을 OS에 돌려주지 않으므로 해제 후에도 주소가 유효해 Access Violation이 나지 않는다. 게다가 LIFO라서 다음 같은 크기 할당이 **방금 해제한 블록을 바로 받는다.** 오래된 포인터로 쓰면 새 객체의 값이 조용히 바뀌고, 증상은 한참 뒤 엉뚱한 곳에서 나타난다. `malloc`/`free`도 잡아 주지는 못하지만, 풀에서는 재사용이 더 확실하게 일어난다. 그래서 Debug의 `StompAllocator`로 이런 버그를 잡아 두는 것이 중요하다.
