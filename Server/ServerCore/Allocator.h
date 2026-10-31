@@ -159,14 +159,13 @@ public:
 		- 여분 바이트 : 정렬 여분(최대 15B) 안의 오버플로는 잡지 못함
 
 		→ 그래서 Debug에서 버그를 찾는 용도로만 쓰고,
-		  Release에서는 실제 할당기(지금은 BaseAllocator, 나중에는 PoolAllocator)를 쓴다.
+		  Release에서는 실제 할당기(PoolAllocator)를 쓴다.
 */
 class StompAllocator
 {
 public:
 	// size는 1 이상. 실패하면 크래시.
 	static void* Alloc(int32 size);
-
 	// Alloc이 돌려준 주소만 받는다. nullptr이면 아무 일도 하지 않는다
 	static void Release(void* pPtr);
 
@@ -177,4 +176,17 @@ private:
 
 	// 반환 주소의 정렬. x64 Windows malloc과 같은 16바이트 (MEMORY_ALLOCATION_ALIGNMENT, 이후 SLIST도 16을 요구)
 	static constexpr int32 ALIGNMENT = 16;
+};
+
+/*
+		[PoolAllocator]
+		GMemory를 다른 할당기와 같은 모양(Alloc/Release)으로 감싼다.
+		- GMemory를 쓰므로 CoreGlobal이 살아 있는 동안에만 호출한다.
+		- Release는 다른 할당기처럼 nullptr이면 아무 일도 하지 않는다.
+*/
+class PoolAllocator
+{
+public:
+	static void* Alloc(int32 size);
+	static void Release(void* pPtr);
 };

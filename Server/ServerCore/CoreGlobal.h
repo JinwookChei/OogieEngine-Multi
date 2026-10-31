@@ -1,5 +1,5 @@
 ﻿#pragma once
-
+extern class Memory* GMemory;
 extern class ThreadManager* GThreadManager;
 extern class DeadLockProfiler* GDeadLockProfiler;
 

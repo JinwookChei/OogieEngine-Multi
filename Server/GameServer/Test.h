@@ -19,6 +19,11 @@ void StompAllocFree();      // StompAllocator 직접 호출: 정렬, 페이지 �
 void MemoryHeaderAttachDetach();  // 헤더 붙이기/떼기: 데이터 주소 = 블록 + sizeof(헤더), 16바이트 정렬, 데이터가 헤더를 덮지 않음
 void MemoryPoolReuse();           // Pop → Push → Pop이 같은 블록을 돌려주는지 (LIFO 재사용), use/reserve 카운트, 16바이트 정렬
 void MemoryPoolConcurrent();      // 스레드 4개 × 10,000번 Pop/Push → use 0, reserve 1~4, 블록을 두 스레드가 동시에 받지 않음
+void MemoryAllocReuse();          // GMemory 할당 → 해제 → 재할당이 같은 주소를 돌려주는지, 16바이트 정렬, 헤더의 블록 크기
+void MemoryBoundarySizes();       // 경계 크기별 16바이트 정렬, 전체 읽기/쓰기, 데이터가 헤더를 덮지 않음
+void MemoryConcurrent();          // 스레드 4개가 크기 5종을 함께 들고 할당/해제 반복 → 데이터가 섞이지 않음
+void PoolAllocatorAllocFree();    // PoolAllocator 직접 호출: 16바이트 정렬, 읽기/쓰기, 재할당 시 같은 주소, nullptr 해제
+void XnewPoolReuse();             // Release 전용: xnew → xdelete → xnew가 같은 주소인지 (Debug는 SKIP)
 
 /*
 	크래시 테스트: 호출하면 반드시 크래시가 나야 정상이다. 한 번에 하나만 호출한다.
@@ -30,6 +35,7 @@ void CrashThreadIdZero();         // InitTLS를 거치지 않은 스레드(LThre
 void CrashDeadLockCycle();        // 스레드 1: P → Q, 스레드 2: Q → R → P (시간 겹침 없음) → DEADLOCK_DETECTED
 
 // Memory 크래시 테스트 (Access Violation 0xC0000005가 나야 정상)
-void CrashStompUseAfterFree();    // xdelete 후 멤버에 쓰기 → Debug만 크래시 (Release는 BaseAllocator)
+void CrashStompUseAfterFree();    // xdelete 후 멤버에 쓰기 → Debug만 크래시 (Release는 PoolAllocator)
 void CrashStompOverflow();        // StompAllocator로 16바이트 받고 [16]에 쓰기 → Debug/Release 모두 크래시
 void CrashMemoryPoolDoublePush(); // 같은 블록을 두 번 Push → ASSERT_CRASH(allocSize_ > 0), Debug/Release 모두 크래시
+void CrashMemoryDoubleRelease();  // 같은 주소를 두 번 Release → ASSERT_CRASH(blockSize > 0), Debug/Release 모두 크래시

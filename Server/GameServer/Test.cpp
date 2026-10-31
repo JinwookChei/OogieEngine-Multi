@@ -391,7 +391,7 @@ void CrashStompUseAfterFree()
 	// 해제된 객체에 쓴다 → Debug(StompAllocator): 페이지가 OS에 반납되어 이 줄에서 Access Violation
 	pKnight->hp_ = 50;
 
-	std::cout << "[CrashStompUseAfterFree] FAIL : 크래시가 나지 않았다 (Release는 BaseAllocator라 정상)" << std::endl;
+	std::cout << "[CrashStompUseAfterFree] FAIL : 크래시가 나지 않았다 (Release는 PoolAllocator라 정상)" << std::endl;
 }
 
 void CrashStompOverflow()
@@ -557,4 +557,211 @@ void CrashMemoryPoolDoublePush()
 	pool.Push(pBlock);
 
 	std::cout << "[CrashMemoryPoolDoublePush] FAIL : 크래시가 나지 않았다" << std::endl;
+}
+
+/*
+	[Memory 테스트] Memory (GMemory)
+*/
+void MemoryAllocReuse()
+{
+	constexpr int32 DATA_SIZE = 100;
+
+	// 1) 할당: 데이터 주소는 16바이트 정렬이고, 헤더에는 헤더 포함 블록 크기가 적혀 있어야 한다
+	void* pFirst = GMemory->Allocate(DATA_SIZE);
+	const bool aligned = (reinterpret_cast<uintptr>(pFirst) % SLIST_ALIGNMENT == 0);
+	const int32 expectedBlockSize = DATA_SIZE + static_cast<int32>(sizeof(MemoryHeader));
+	const bool headerOk = (MemoryHeader::DetachHeader(pFirst)->allocSize_ == expectedBlockSize);
+
+	// 2) 해제 후 같은 크기를 다시 할당: 풀이 방금 받은 블록을 그대로 다시 줘야 한다 (LIFO 재사용)
+	GMemory->Release(pFirst);
+	void* pSecond = GMemory->Allocate(DATA_SIZE);
+	const bool reused = (pSecond == pFirst);
+
+	GMemory->Release(pSecond);
+
+	if (aligned == false || headerOk == false || reused == false)
+	{
+		std::cout << "[MemoryAllocReuse] FAIL : aligned " << aligned << ", headerOk " << headerOk << ", reused " << reused << std::endl;
+		return;
+	}
+
+	std::cout << "[MemoryAllocReuse] OK" << std::endl;
+}
+
+void MemoryBoundarySizes()
+{
+	const int32 headerSize = static_cast<int32>(sizeof(MemoryHeader));
+
+	// 가장 작은 크기, 풀 간격이 바뀌는 지점, 블록 크기가 MAX_ALLOC_SIZE인 지점과 그 바로 위, 충분히 큰 크기
+	const int32 sizes[] = {
+		1,
+		1024,
+		Memory::MAX_ALLOC_SIZE - headerSize,
+		Memory::MAX_ALLOC_SIZE - headerSize + 1,
+		Memory::MAX_ALLOC_SIZE,
+		5000
+	};
+
+	for (int32 size : sizes)
+	{
+		void* pPtr = GMemory->Allocate(size);
+		const bool aligned = (reinterpret_cast<uintptr>(pPtr) % SLIST_ALIGNMENT == 0);
+
+		// 받은 메모리 전체를 쓰고 다시 읽는다
+		int8* pBytes = static_cast<int8*>(pPtr);
+		for (int32 i = 0; i < size; ++i)
+			pBytes[i] = static_cast<int8>(i);
+
+		bool dataOk = true;
+		for (int32 i = 0; i < size; ++i)
+		{
+			if (pBytes[i] != static_cast<int8>(i))
+				dataOk = false;
+		}
+
+		// 데이터를 전부 써도 헤더는 그대로여야 한다
+		const bool headerOk = (MemoryHeader::DetachHeader(pPtr)->allocSize_ == size + headerSize);
+
+		GMemory->Release(pPtr);
+
+		if (aligned == false || dataOk == false || headerOk == false)
+		{
+			std::cout << "[MemoryBoundarySizes] FAIL : size " << size << ", aligned " << aligned
+				<< ", dataOk " << dataOk << ", headerOk " << headerOk << std::endl;
+			return;
+		}
+	}
+
+	std::cout << "[MemoryBoundarySizes] OK" << std::endl;
+}
+
+void MemoryConcurrent()
+{
+	constexpr int32 THREAD_COUNT = 4;
+	constexpr int32 REPEAT_COUNT = 2'000;
+
+	Atomic<int32> badDataCount{ 0 };
+
+	for (int32 t = 0; t < THREAD_COUNT; ++t)
+	{
+		GThreadManager->Launch([&badDataCount, t]()
+			{
+				constexpr int32 SIZE_COUNT = 5;
+				constexpr int32 SIZES[SIZE_COUNT] = { 16, 100, 1000, 3000, 5000 };
+
+				for (int32 i = 0; i < REPEAT_COUNT; ++i)
+				{
+					int8* blocks[SIZE_COUNT] = { nullptr };
+
+					// 스레드와 크기마다 다른 값으로 채운다. 블록을 함께 들고 있으므로 블록끼리 겹치거나 다른 스레드와 공유되면 값이 섞인다
+					for (int32 s = 0; s < SIZE_COUNT; ++s)
+					{
+						blocks[s] = static_cast<int8*>(GMemory->Allocate(SIZES[s]));
+						const int8 mark = static_cast<int8>(t * 10 + s + 1);
+						for (int32 j = 0; j < SIZES[s]; ++j)
+							blocks[s][j] = mark;
+					}
+
+					for (int32 s = 0; s < SIZE_COUNT; ++s)
+					{
+						const int8 mark = static_cast<int8>(t * 10 + s + 1);
+						for (int32 j = 0; j < SIZES[s]; ++j)
+						{
+							if (blocks[s][j] != mark)
+							{
+								badDataCount.fetch_add(1);
+								break;
+							}
+						}
+						GMemory->Release(blocks[s]);
+					}
+				}
+			});
+	}
+	GThreadManager->Join();
+
+	if (badDataCount.load() != 0)
+	{
+		std::cout << "[MemoryConcurrent] FAIL : bad data " << badDataCount.load() << " (expected 0)" << std::endl;
+		return;
+	}
+
+	std::cout << "[MemoryConcurrent] OK" << std::endl;
+}
+
+/*
+	[Memory 테스트] PoolAllocator
+*/
+void PoolAllocatorAllocFree()
+{
+	constexpr int32 DATA_SIZE = 100;
+
+	// 1) 할당: 16바이트 정렬
+	void* pFirst = PoolAllocator::Alloc(DATA_SIZE);
+	const bool aligned = (reinterpret_cast<uintptr>(pFirst) % SLIST_ALIGNMENT == 0);
+
+	// 2) 받은 메모리 전체를 쓰고 다시 읽는다
+	int8* pBytes = static_cast<int8*>(pFirst);
+	for (int32 i = 0; i < DATA_SIZE; ++i)
+		pBytes[i] = static_cast<int8>(i);
+
+	bool dataOk = true;
+	for (int32 i = 0; i < DATA_SIZE; ++i)
+	{
+		if (pBytes[i] != static_cast<int8>(i))
+			dataOk = false;
+	}
+
+	// 3) 해제 후 같은 크기를 다시 할당: 풀이 같은 블록을 돌려줘야 한다
+	PoolAllocator::Release(pFirst);
+	void* pSecond = PoolAllocator::Alloc(DATA_SIZE);
+	const bool reused = (pSecond == pFirst);
+	PoolAllocator::Release(pSecond);
+
+	// 4) nullptr 해제: 다른 할당기처럼 아무 일도 하지 않아야 한다
+	PoolAllocator::Release(nullptr);
+
+	if (aligned == false || dataOk == false || reused == false)
+	{
+		std::cout << "[PoolAllocatorAllocFree] FAIL : aligned " << aligned << ", dataOk " << dataOk << ", reused " << reused << std::endl;
+		return;
+	}
+
+	std::cout << "[PoolAllocatorAllocFree] OK" << std::endl;
+}
+
+void XnewPoolReuse()
+{
+#ifdef _DEBUG
+	// Debug의 DefaultAllocator는 StompAllocator라 풀을 거치지 않는다
+	std::cout << "[XnewPoolReuse] SKIP (Debug는 StompAllocator)" << std::endl;
+#else
+	// xdelete가 풀에 돌려준 블록을 다음 xnew가 그대로 다시 받아야 한다
+	MemoryTestKnight* pFirst = xnew<MemoryTestKnight>(100, 10);
+	xdelete(pFirst);
+
+	MemoryTestKnight* pSecond = xnew<MemoryTestKnight>(200, 20);
+	const bool reused = (pSecond == pFirst);
+	const bool constructed = (pSecond->hp_ == 200 && pSecond->attack_ == 20);
+	xdelete(pSecond);
+
+	if (reused == false || constructed == false)
+	{
+		std::cout << "[XnewPoolReuse] FAIL : reused " << reused << ", constructed " << constructed << std::endl;
+		return;
+	}
+
+	std::cout << "[XnewPoolReuse] OK" << std::endl;
+#endif
+}
+
+void CrashMemoryDoubleRelease()
+{
+	void* pPtr = GMemory->Allocate(100);
+	GMemory->Release(pPtr);
+
+	// 이미 풀에 돌아간 블록을 또 해제한다 → Release의 ASSERT_CRASH(blockSize > 0)
+	GMemory->Release(pPtr);
+
+	std::cout << "[CrashMemoryDoubleRelease] FAIL : 크래시가 나지 않았다" << std::endl;
 }

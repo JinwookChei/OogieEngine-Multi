@@ -24,6 +24,11 @@ int main(int argc, char* argv[])
 	MemoryHeaderAttachDetach();
 	MemoryPoolReuse();
 	MemoryPoolConcurrent();
+	MemoryAllocReuse();
+	MemoryBoundarySizes();
+	MemoryConcurrent();
+	PoolAllocatorAllocFree();
+	XnewPoolReuse();
 
 	// 크래시 테스트: 하나씩 주석을 풀고 실행 → 크래시 확인 후 다시 주석 처리
 	// CrashInvalidUnlockOrder();
@@ -33,6 +38,7 @@ int main(int argc, char* argv[])
 	// CrashStompUseAfterFree();
 	// CrashStompOverflow();
 	// CrashMemoryPoolDoublePush();
+	// CrashMemoryDoubleRelease();
 
 	std::cout << "GameServer End" << std::endl;
 }

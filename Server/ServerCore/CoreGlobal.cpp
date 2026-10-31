@@ -3,12 +3,16 @@
 #include "ThreadManager.h"
 #include "DeadLockProfiler.h"
 
+Memory* GMemory = nullptr;
 ThreadManager* GThreadManager = nullptr;
 DeadLockProfiler* GDeadLockProfiler = nullptr;
 
 CoreGlobal::CoreGlobal()
 {
 	// CoreGlobal을 두 번 만드는 실수 차단
+	ASSERT_CRASH(GMemory == nullptr);
+	GMemory = new Memory();
+
 	ASSERT_CRASH(GThreadManager == nullptr);
 	GThreadManager = new ThreadManager();
 	GDeadLockProfiler = new DeadLockProfiler();
@@ -22,4 +26,7 @@ CoreGlobal::~CoreGlobal()
 
 	delete GDeadLockProfiler;
 	GDeadLockProfiler = nullptr;
+
+	delete GMemory;
+	GMemory = nullptr;
 }

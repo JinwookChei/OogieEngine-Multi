@@ -52,3 +52,16 @@ void StompAllocator::Release(void* pPtr)
 	BOOL res = ::VirtualFree(pBase, 0, MEM_RELEASE);
 	ASSERT_CRASH(res);
 }
+
+void* PoolAllocator::Alloc(int32 size)
+{
+	return GMemory->Allocate(size);
+}
+
+void PoolAllocator::Release(void* pPtr)
+{
+	if (pPtr == nullptr)
+		return;
+
+	GMemory->Release(pPtr);
+}
