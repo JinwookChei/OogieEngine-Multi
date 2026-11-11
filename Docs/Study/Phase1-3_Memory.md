@@ -8,6 +8,9 @@
 | 2 | `Allocator.h/.cpp`, `Memory.h` | StompAllocator (VirtualAlloc, 해제 후 접근 즉시 크래시) + Debug 전용 `DefaultAllocator` | ✅ |
 | 3-1 | `MemoryPool.h` | MemoryHeader (블록 앞 크기 머리말 + SLIST 노드) | ✅ |
 | 3-2 | `MemoryPool.h/.cpp` | MemoryPool (SLIST lock-free Push/Pop, 사용/예약 카운트) | ✅ |
+| 4-1 | `Memory.h/.cpp`, `CoreGlobal` | Memory (크기별 풀 48개 + `poolTable_`, 큰 블록 직접 할당, `GMemory`) | ✅ |
+| 4-2 | `Allocator.h/.cpp`, `Memory.h` | PoolAllocator (Release의 `DefaultAllocator` 교체) | ✅ |
+| 5 | `Memory.h` | MakeShared (`xnew` + 삭제자 `xdelete<Type>`로 SharedPtr 생성) | ✅ |
 
 ---
 
@@ -949,3 +952,88 @@ using DefaultAllocator = PoolAllocator;
 **Q2. Release 빌드에서 `CrashStompUseAfterFree`를 실행하면 크래시가 나나? `BaseAllocator`일 때와 비교해 해제 후 접근의 위험이 어떻게 달라지나?**
 > ✅ 내 답: 크래시가 나지 않는다.
 > 💬 보충: 맞다. 후반부는 미답변이어서 해설을 붙인다. 풀은 블록을 OS에 돌려주지 않으므로 해제 후에도 주소가 유효해 Access Violation이 나지 않는다. 게다가 LIFO라서 다음 같은 크기 할당이 **방금 해제한 블록을 바로 받는다.** 오래된 포인터로 쓰면 새 객체의 값이 조용히 바뀌고, 증상은 한참 뒤 엉뚱한 곳에서 나타난다. `malloc`/`free`도 잡아 주지는 못하지만, 풀에서는 재사용이 더 확실하게 일어난다. 그래서 Debug의 `StompAllocator`로 이런 버그를 잡아 두는 것이 중요하다.
+
+---
+
+## Step 5. MakeShared
+
+### 🎯 목표
+`xnew`로 만든 객체를 `SharedPtr`로 감싸고, 마지막 참조가 사라지면 `delete`가 아니라 `xdelete`로 해제되게 하는 `MakeShared<Type>(args...)`를 만든다.
+
+### 📖 개념 1 — shared_ptr의 두 덩어리
+```
+SharedPtr<Knight> ──▶ [ Knight 객체 ]   ← xnew로 우리 할당기(Stomp/Pool)에서 받는다
+                 └──▶ [ 컨트롤 블록 ]    ← 참조 카운트 + 삭제자(지울 때 부를 함수)
+```
+- `std::make_shared`나 `std::shared_ptr<T>(new T)`는 우리 할당기를 거치지 않는다. 세션, Room, Job처럼 가장 많이 쓰일 객체가 메모리 시스템 밖에 남게 된다.
+- `shared_ptr` 생성자에 **(포인터, 삭제자)**를 함께 넘기면, 참조 카운트가 0이 될 때 `delete` 대신 그 삭제자를 부른다.
+- 삭제자는 **만들 때 컨트롤 블록에 저장**된다. 나중에 부모 타입 `SharedPtr`로 옮겨 담아도 처음 정한 삭제자가 그대로 불린다 (타입 소거, type erasure).
+
+> 💡 **비유**: 공유 자전거. 본체(객체)는 우리 대여소(`xnew`)에서 빌렸으니, 마지막 사람이 반납할 때도 같은 대여소(`xdelete`)로 돌려줘야 한다. 컨트롤 블록은 자전거에 붙은 "반납처 스티커 + 사용자 수 카운터"다.
+
+### 📖 개념 2 — 완벽 전달 (`std::forward`)
+- `Args&&... args`(전달 참조)로 받으면 컴파일러가 "원래 lvalue였는지 rvalue였는지"를 `Args`에 기록한다.
+- 매개변수 `args`는 이름이 있어서 함수 안에서는 lvalue로 취급된다. `std::forward<Args>(args)...`가 `Args`의 기록을 보고 **rvalue였던 것만 다시 rvalue로** 되돌린다.
+- `std::move`는 무조건 rvalue로 바꾸고, `std::forward`는 원래 모양대로 되돌린다. 둘 다 타입만 바꾸는 캐스팅이라 실행 비용이 없다.
+- 규칙: `Args&&`로 받았으면 `std::forward<Args>(args)...`로 넘긴다. 꺾쇠 안의 `Args`를 생략하면 컴파일 오류가 나고, 같은 인자를 두 번 forward하지 않는다.
+
+> 💡 **택배 비유**: "깨지기 쉬움(임시값)" 스티커가 붙은 상자를 중간 기사(`MakeShared`, `xnew`)가 받으면 스티커가 떨어진다. `std::forward`는 원래 스티커를 다시 붙여서 다음 사람에게 넘기는 일이다.
+
+### 🧱 핵심 코드
+```cpp
+// Memory.h
+template<typename Type, typename... Args>
+SharedPtr<Type> MakeShared(Args&&... args)
+{
+	Type* pObj = xnew<Type>(std::forward<Args>(args)...);
+	ASSERT_CRASH(pObj != nullptr);
+
+	return SharedPtr<Type>(pObj, xdelete<Type>);
+}
+```
+- `xdelete`는 템플릿이라 삭제자로 넘길 때 `<Type>`을 붙여야 함수 하나로 정해진다.
+- `SharedPtr<T>`는 `Types.h`의 `std::shared_ptr<T>` 별칭이다.
+
+> ⚠️ **한계**: 이번 버전은 **객체만** 우리 할당기에서 받는다. 컨트롤 블록은 표준 라이브러리가 기본 `new`로 따로 할당한다. `StlAllocator`를 만든 뒤 `std::allocate_shared`로 객체와 컨트롤 블록을 한 번에 풀에서 받도록 바꿀 수 있다.
+
+### 🔧 강의와 다른 점
+| 변경 | 이유 |
+|---|---|
+| `using namespace std` 없이 `SharedPtr<T>` 별칭 사용 | 헤더의 `using namespace`는 include하는 모든 파일(클라이언트 엔진 포함)로 퍼지고 되돌릴 수 없다. 별칭은 이름 하나만 만들어 안전하다 |
+| `<memory>`를 `Memory.h`에서 직접 include | 자립 헤더 규칙 (Types.h가 이미 include해도 기대지 않는다) |
+| 컨트롤 블록이 기본 할당이라는 한계를 헤더 주석에 명시 | 메모리 통계나 Stomp 검사가 컨트롤 블록을 다루지 않는다는 사실을 사용하는 쪽이 알 수 있게 |
+
+> 📝 같은 시기에 `Types.h`의 정수 별칭 이름을 PascalCase로 바꿨다 (`int32` → `Int32`, `uint64` → `UInt64`, `uintptr` → `UIntPtr`). 이미 있던 `Atomic`, `Mutex`와 이름 규칙을 통일하기 위해서다. 이 문서의 앞 Step 코드 예시는 그 시점의 이름(`int32`)으로 남아 있다.
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| 매개변수에 `Type type`을 추가 | 쓰지 않는 값을 하나 더 받아야 하는 시그니처 | 타입은 호출할 때 꺾쇠(`MakeShared<Knight>(...)`)로 정한다. 값으로 받을 필요가 없다 |
+| 반환 타입을 `shared_ptr<Type>`으로 씀 | `std::`가 없어 이름을 못 찾아 컴파일 오류 | 헤더에서는 `std::`를 붙이거나 `Types.h` 별칭(`SharedPtr`)을 쓴다 |
+| 삭제자로 `xdelete`만 넘김 | 템플릿 인자를 추론할 수 없어 컴파일 오류 | 템플릿 함수를 값으로 넘길 때는 `xdelete<Type>`처럼 타입을 지정한다 |
+| `ASSERT_CRASH(...)`, `return ...` 끝 세미콜론 누락 | 컴파일 오류 | `do { } while (0)` 매크로도 문장이므로 `;`가 필요하다 |
+| `Type * pObj` 띄어쓰기 | 다른 코드(`Type* pMemory`)와 불일치 | `*`는 타입 쪽에 붙인다 |
+
+> 📝 `ASSERT_CRASH(pObj != nullptr)`는 남겨 두었다. `xnew`는 실패하면 할당기 안에서 이미 크래시하므로 이 검사는 실패하지 않는다. 동작에는 영향이 없다.
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `MakeSharedRefCount` | 생성자 1회, 인자(100, 10) 전달, `use_count` 1 → 복사 후 2 → 복사본 `reset()` 후 1이고 소멸자 0회 → 마지막 `reset()` 후 소멸자 정확히 1회 | `OK` (Debug/Release) |
+| `MakeSharedPoolReuse` | `MakeShared` 객체를 `reset()`한 직후 `xnew<MemoryTestKnight>`가 같은 주소를 받는지 (객체 메모리가 풀로 돌아갔다는 증거) | Release `OK`, Debug `SKIP` |
+
+> 📝 2026-11-11: 테스트와 `MakeShared` 헤더 주석은 사용자 요청으로 Claude가 작성했다. 정수 타입 이름 변경도 사용자 요청으로 Claude가 일괄 적용했다.
+
+### 🧩 복습 질문
+**Q1. `MakeShared`에서 삭제자를 빼고 `SharedPtr<Type>(xnew<Type>(...))`만 쓰면, 마지막 참조가 사라질 때 무엇이 호출되나? Debug와 Release에서 각각 어떤 일이 생기나?**
+> ✅ 내 답: 삭제자를 빼면 `xdelete`가 아닌 일반 `delete`가 호출되어서 할당과 해제의 쌍이 맞지 않는다.
+> 💬 보충: `delete`는 ① 소멸자 호출 ② `operator delete`(CRT 힙의 `free`) 두 단계다. ①은 정상이라 소멸자는 불린다. 문제는 ②에서 **힙이 준 적 없는 주소를 힙에 돌려준다**는 것이다.
+> - Debug(Stomp): `VirtualAlloc` 페이지 끝 주소 → Debug CRT가 힙 헤더 확인에 실패 → `_CrtIsValidHeapPointer` 단언 창 또는 크래시 (Step 2 Q9와 같은 상황)
+> - Release(Pool): 풀 블록 시작 + 16 주소 → 힙이 그 앞을 관리 정보로 읽어 힙 손상. 바로 크래시(`0xC0000374`)하거나 한참 뒤 엉뚱한 곳에서 터진다
+> - 블록이 풀로 돌아가지 않으니 `useCount_`도 줄지 않고 블록을 영원히 잃는다. → `MakeShared`가 삭제자를 직접 박아 넣어서 사용하는 쪽의 실수를 막는다.
+
+**Q2. 가상 소멸자가 없는 `Base`와 자식 `Knight`가 있다. `SharedPtr<Base> p = MakeShared<Knight>();`로 담은 뒤 마지막 참조가 사라지면 `Knight`의 소멸자가 불릴까?**
+> ✅ 내 답: `Knight`의 소멸자가 불린다.
+> 💬 보충: 삭제자 `xdelete<Knight>`가 `MakeShared<Knight>`를 호출하는 순간 `Knight*` 주소와 함께 컨트롤 블록에 저장된다. `SharedPtr<Base>`로 옮겨도 포인터 타입만 바뀌고 컨트롤 블록은 공유되므로, 마지막에 `xdelete<Knight>` → `~Knight()` → `~Base()` 순서로 불린다.
+> - 비교: raw 포인터 `Base* p = xnew<Knight>(); xdelete(p);`는 `Type`이 `Base`로 추론되어 `~Base()`만 불린다 (`~Knight()` 누락, UB).
+> - ⚠️ 이 덕을 보는 건 `shared_ptr`뿐이다. `unique_ptr<Base>`나 raw 포인터는 구해 주지 않으므로, 상속해서 쓸 클래스에는 가상 소멸자를 붙이는 규칙을 그대로 지킨다.
