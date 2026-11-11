@@ -11,6 +11,7 @@
 | 4-1 | `Memory.h/.cpp`, `CoreGlobal` | Memory (크기별 풀 48개 + `poolTable_`, 큰 블록 직접 할당, `GMemory`) | ✅ |
 | 4-2 | `Allocator.h/.cpp`, `Memory.h` | PoolAllocator (Release의 `DefaultAllocator` 교체) | ✅ |
 | 5 | `Memory.h` | MakeShared (`xnew` + 삭제자 `xdelete<Type>`로 SharedPtr 생성) | ✅ |
+| 6-1 | `Memory.h`, `Types.h` | StlAllocator (STL 컨테이너가 `DefaultAllocator`를 쓰게 하는 어댑터, `USize` 별칭) | ✅ |
 
 ---
 
@@ -1037,3 +1038,147 @@ SharedPtr<Type> MakeShared(Args&&... args)
 > 💬 보충: 삭제자 `xdelete<Knight>`가 `MakeShared<Knight>`를 호출하는 순간 `Knight*` 주소와 함께 컨트롤 블록에 저장된다. `SharedPtr<Base>`로 옮겨도 포인터 타입만 바뀌고 컨트롤 블록은 공유되므로, 마지막에 `xdelete<Knight>` → `~Knight()` → `~Base()` 순서로 불린다.
 > - 비교: raw 포인터 `Base* p = xnew<Knight>(); xdelete(p);`는 `Type`이 `Base`로 추론되어 `~Base()`만 불린다 (`~Knight()` 누락, UB).
 > - ⚠️ 이 덕을 보는 건 `shared_ptr`뿐이다. `unique_ptr<Base>`나 raw 포인터는 구해 주지 않으므로, 상속해서 쓸 클래스에는 가상 소멸자를 붙이는 규칙을 그대로 지킨다.
+
+---
+
+## Step 6-1. StlAllocator
+
+### 🎯 목표
+`std::vector`, `std::map` 같은 STL 컨테이너가 내부 메모리(버퍼, 노드)를 **우리 할당기(`DefaultAllocator`)**에서 받게 하는 `StlAllocator<T>`를 만든다.
+
+### 📖 개념 1 — 왜 필요한가
+- `xnew`/`MakeShared`로 객체는 우리 할당기에 올렸지만, 그 객체 **안의** `std::vector`, `std::map`, `std::string`은 여전히 기본 `new`를 쓴다.
+- 서버에서 메모리를 가장 많이, 가장 자주 쓰는 것이 컨테이너다 (패킷 버퍼, 세션 목록, Job 큐).
+- 컨테이너는 마지막 템플릿 인자로 할당기를 받는다: `std::vector<Int32, StlAllocator<Int32>>`
+
+### 📖 개념 2 — STL 할당기 규약 (C++17 최소)
+| 항목 | 역할 |
+|---|---|
+| `value_type` | 이 할당기가 다루는 원소 타입. `allocator_traits`가 이것을 기준으로 `pointer`, `size_type` 등을 자동 계산하고, 컨테이너는 자기 원소 타입과 같은지 검사한다 |
+| 기본 생성자 | 컨테이너가 할당기를 만들 수 있게 |
+| 변환 생성자 `StlAllocator(const StlAllocator<Other>&)` | 다른 타입용 할당기를 만들 수 있게 (rebind) |
+| `allocate(n)` | **T를 n개** 담을 메모리 (바이트 수가 아니라 개수). 생성자는 부르지 않는다 |
+| `deallocate(p, n)` | `allocate`로 받은 메모리 반납 |
+| `==`, `!=` | 한쪽이 받은 메모리를 다른 쪽이 해제해도 되는지. 상태가 없으니 항상 같다. C++17은 둘 다 필요 (C++20부터 `!=` 자동 생성) |
+
+> 💡 **비유**: `value_type`은 택배 상자의 "내용물" 라벨이다. 물류 센터(`allocator_traits`)는 라벨을 보고 포장 방법을 정하고, 수령인(컨테이너)은 자기가 주문한 물건과 맞는지 확인한다.
+
+### 📖 개념 3 — rebind: map은 pair가 아니라 노드를 할당한다
+```
+std::map<K, V, std::less<K>, StlAllocator<std::pair<const K, V>>>
+  → 실제 할당 대상: _Tree_node { 왼쪽/부모/오른쪽 포인터, 색, 끝 표시, pair<const K, V> }
+  → allocator_traits::rebind_alloc<_Tree_node> = StlAllocator<_Tree_node>  (템플릿 첫 인자만 바꿈)
+  → 이 할당기 객체를 원래 StlAllocator<pair>에서 만들 때 변환 생성자가 쓰인다
+```
+- map은 비어 있어도 생성자에서 머리 노드(센티널)를 하나 할당한다.
+- MSVC Debug에서는 `vector`도 반복자 검사용 객체(`_Container_proxy`)를 rebind로 따로 할당한다 → 변환 생성자가 없으면 Debug의 vector도 컴파일되지 않는다.
+
+> 💡 **비유**: 같은 회사(우리 할당기) 사원증인데 부서(타입)만 다른 것. 부서를 옮겨도(rebind) 회사 금고(풀)는 같다.
+
+### 📖 개념 4 — 왜 `DefaultAllocator`인가 (설계 선택)
+- Debug에서 Stomp를 거치므로 컨테이너 버퍼를 넘어서 쓰는 버그도 그 줄에서 크래시로 잡힌다.
+- "할당기 선택은 `DefaultAllocator` 한 곳에서"라는 지금까지의 규칙과 맞는다.
+- 대가: Debug에서 컨테이너가 커질 때마다 시스템 콜 → 느리다. 우리 규모에서는 괜찮다.
+
+### 🧱 핵심 코드
+```cpp
+// Memory.h
+template<typename Type>
+class StlAllocator
+{
+	// 할당기들은 16바이트 정렬까지만 보장한다 (xnew와 같은 검사)
+	STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
+
+public:
+	using value_type = Type;
+
+	StlAllocator() = default;
+
+	// 다른 타입용 StlAllocator에서 만든다. 옮길 상태가 없으므로 아무 일도 하지 않는다
+	template<typename Other>
+	StlAllocator(const StlAllocator<Other>& /* other */) {}
+
+	Type* allocate(USize count)
+	{
+		// 아래 곱셈 결과가 Int32를 넘지 않도록 곱하기 전에 나눗셈으로 확인한다
+		ASSERT_CRASH(count <= INT32_MAX / sizeof(Type));
+
+		const Int32 size = static_cast<Int32>(count * sizeof(Type));
+		Type* pMemory = static_cast<Type*>(DefaultAllocator::Alloc(size));
+
+		ASSERT_CRASH(pMemory != nullptr);
+		return pMemory;
+	}
+
+	// 크기는 할당기가 이미 안다 (MemoryHeader / Stomp 페이지) → count는 쓰지 않는다
+	void deallocate(Type* pPtr, USize /* count */)
+	{
+		DefaultAllocator::Release(pPtr);
+	}
+};
+
+// 상태가 없는 할당기라 타입이 달라도 항상 같다
+template<typename T, typename U>
+bool operator==(const StlAllocator<T>&, const StlAllocator<U>&) { return true; }
+
+template<typename T, typename U>
+bool operator!=(const StlAllocator<T>&, const StlAllocator<U>&) { return false; }
+```
+```cpp
+// Types.h
+#include <cstddef>
+using USize = std::size_t;   // STL 할당기 규약의 크기 인자 등
+```
+
+| 포인트 | 설명 |
+|---|---|
+| 넘침 검사를 곱셈 **전에** 나눗셈으로 | `count * sizeof(Type)`이 넘친 뒤에는 검사할 수 없다. `count <= INT32_MAX / sizeof(Type)`는 검사 자체가 넘치지 않는다 |
+| 변환 생성자에 `explicit` 없음 | 컨테이너 내부에서 암시적으로 변환되어야 한다 |
+| 매개변수 이름을 주석 처리 (`/* count */`) | 규약 때문에 받아야 하지만 쓰지 않는 값. 이름을 지우면 C4100(참조되지 않은 매개변수) 경고가 안 나고, 주석으로 의미는 남는다. `[[maybe_unused]]`나 `(void)count;`도 같은 효과 |
+| `==`/`!=`를 클래스 밖, 템플릿 인자 2개로 | rebind된 할당기(`StlAllocator<Node>`)와 원래 할당기(`StlAllocator<Pair>`)처럼 **타입이 다른 할당기끼리** 비교할 수 있어야 한다 |
+
+> 📝 `==`/`!=`는 지금 테스트에서는 없어도 빌드된다. 멤버가 없는 할당기는 `allocator_traits::is_always_equal`이 `true`라 MSVC가 비교를 건너뛰는 경우가 많기 때문이다. 하지만 move 대입, `swap`, `list::splice`처럼 메모리 소유권을 옮기는 경로에서 쓰일 수 있고, 템플릿이라 쓰는 순간에야 오류가 드러나므로 규약대로 채워 둔다.
+
+### 🔧 강의와 다른 점
+| 변경 | 이유 |
+|---|---|
+| `PoolAllocator` 대신 `DefaultAllocator` 사용 | Debug에서는 Stomp로 컨테이너 버퍼 오버플로까지 잡고, 할당기 선택을 한 곳에 모은다 |
+| `count × sizeof` 넘침 검사 | `Int32` 크기로 넘기기 전에 곱셈 넘침을 막는다 |
+| 정렬 `STATIC_ASSERT` | `xnew`와 같은 정렬 보장 범위 검사 |
+| `size_t`를 `USize` 별칭으로 | 프로젝트 데이터 타입 규칙 (Types.h 별칭 사용) |
+| 위치를 `Memory.h`로 | `DefaultAllocator` 별칭이 `Memory.h`에 있다 |
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| `static_cast<Int32>count * sizeof(Type)` | 괄호가 없어 컴파일 오류 | `static_cast<T>(식)` — 변환할 식 전체를 괄호로 감싼다 |
+| `Type* p = DefaultAllocator::Alloc(size);` | `void*` → `Type*` 암시적 변환 불가 | C++은 `void*`를 자동 변환하지 않는다. `static_cast<Type*>` |
+| `operator==`를 클래스 안에 매개변수 2개 + 선언 안 된 `T`, `U`로 작성 | 컴파일 오류 | 멤버 연산자는 왼쪽이 `this`라 매개변수 1개. 타입이 다른 할당기 비교는 클래스 밖 함수 템플릿으로 |
+| `using value_type`을 빠뜨림 | 클래스만 있을 때는 빌드되지만 컨테이너에 넣는 순간 오류 | 템플릿은 쓰는 순간에야 검사된다 → 실제로 쓰는 테스트가 있어야 검증된다 |
+| `Types.cpp`에 같은 줄 중복 | 무해하지만 지저분함 | 붙여넣은 뒤 확인 |
+| (Claude) 타입 이름 일괄 변경에 쓴 `sed`가 15개 파일의 줄바꿈을 CRLF → LF로 바꿈, 확인 명령도 잘못돼 "CRLF 유지"라고 잘못 보고 | 커밋 내용은 영향 없음 (git이 LF로 저장). 작업 폴더만 LF가 됨 → CRLF로 복구 | 줄바꿈은 바이트 단위(`\r\n` 개수)로 확인한다 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `StlAllocatorAllocFree` | `StlAllocator<Int32>` 직접 호출: `allocate(10)` → 16바이트 정렬 → 10칸 쓰고 읽기 → `deallocate` | `OK` (Debug/Release) |
+| `StlAllocatorContainers` | `vector` 1~1000 `push_back`(재할당 여러 번) → 크기·합계 / `map` 키 1~1000 삽입 → 짝수 키 `erase` → 크기 500, 홀수 키의 값이 키 × 10 | `OK` (Debug/Release) |
+
+> 📝 2026-11-11: `StlAllocator` 리뷰 지적 사항 수정(`value_type`, 비교 연산자, 정렬 검사, 주석)과 테스트는 사용자 요청으로 Claude가 작성했다.
+
+### 🧩 복습 질문
+**Q1. `allocate(count)`에서 `count`를 바이트 수로 착각해 `DefaultAllocator::Alloc(count)`로 넘기면? Debug(Stomp)에서는 어디서 드러날까?**
+> ✅ 내 답: `count`를 바이트로 넘기면 너무 작게 할당돼서 오버플로가 발생한다.
+> 💬 보충: `vector<Int32>`가 10개를 요청하면 40바이트가 필요한데 10바이트(16으로 올림 = Int32 4칸)만 받는다.
+> - Debug(Stomp): 16바이트가 페이지 끝에 붙어 있어 **5번째 원소(`[4]`)를 쓰는 순간 Access Violation**. 크래시 위치는 STL 내부(`push_back` → 원소 생성)지만 호출 스택으로 원인을 찾을 수 있다.
+> - Release(Pool): 26바이트 블록이 32 풀에서 나오고(데이터 16바이트), 넘친 쓰기가 옆 메모리를 조용히 덮는다 → 한참 뒤 엉뚱한 곳에서 크래시.
+> - 함정: `sizeof(T) == 1`인 타입(`Int8`, `char`)은 개수와 바이트 수가 같아 버그가 드러나지 않는다. 그래서 테스트는 `Int32`로 한다.
+
+**Q2. `std::map<..., StlAllocator<std::pair<const K, V>>>`의 map은 실제로 무엇을 할당하나? 그때 `StlAllocator`의 어느 부분이 쓰이나?**
+> ✅ 내 답: 트리 노드를 할당하고, 변환 생성자가 쓰인다.
+> 💬 보충: 노드는 자식/부모 포인터, 색, 끝 표시, 그리고 `pair<const K, V>`를 묶은 구조다. `allocator_traits::rebind_alloc`이 `StlAllocator<노드>` **타입**을 만들고, 그 **객체**를 원래 할당기에서 만들 때 변환 생성자가 호출된다. 이후 `allocate(1)`은 `sizeof(노드)`를 요청한다. map은 비어 있어도 머리 노드를 하나 할당하고, MSVC Debug의 vector도 반복자 검사 객체를 rebind로 할당한다.
+
+**📝 세션 중 질문과 답**
+- `using value_type = Type;`은 왜 쓰나? → STL 할당기 규약에서 유일하게 반드시 있어야 하는 타입 이름이다. `allocator_traits`가 이것을 기준으로 나머지 타입을 자동으로 채우고, 컨테이너가 자기 원소 타입과 같은지 검사한다. 없으면 컨테이너에 넣는 순간 컴파일 오류.
+- `deallocate(Type* pPtr, USize /* count */)`에서 이름을 왜 주석 처리했나? → 규약 때문에 받아야 하지만 쓰지 않는 값이다. 이름을 지워 경고를 막고, 주석으로 의미는 남긴다.
+- `==`/`!=`도 꼭 써야 하나? → C++17 규약의 필수 항목이다. move 대입, `swap`, `splice`처럼 메모리 소유권을 옮길 때 쓰일 수 있고, 템플릿이라 그때 가서야 오류가 나므로 처음부터 채워 둔다. 실행 비용은 0.

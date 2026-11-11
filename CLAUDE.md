@@ -101,7 +101,7 @@ Docs/Diagrams/      학습용 인터랙티브 다이어그램 (HTML, Phase별)
 | 인코딩 | 서버 신규 파일은 UTF-8(BOM), 클라 기존 파일은 CP949 유지 |
 | 테스트 코드 위치 | `main`이 있는 파일(`GameServer.cpp` 등)에 테스트를 직접 쓰지 않는다. 각 프로젝트의 `Test.h`/`Test.cpp`에 테스트 함수를 만들고 `main`에서 호출만 한다 |
 | 서버 네이밍 | **멤버 변수는 뒤에 `_`** (`lock_`, `threads_`) — 강의의 앞 `_`(`_lock`) 대신 OogieEngine과 통일. 전역 `G`, TLS `L`, 함수 안 static `S` 접두사. **포인터 변수(멤버, 지역, 파라미터)는 맨 앞에 소문자 `p`** (`MemoryPool* pPool`, `void* pPtr`, `const char* pName_`) — OogieEngine과 통일. 스마트 포인터도 붙인다 (`shared_ptr<GameSession> pSession`). 포인터를 담는 컨테이너, 배열은 붙이지 않는다 (`pools_`, `poolTable_`). 강의 코드를 옮길 때 예시 코드도 이 규칙으로 바꿔 제시한다 |
-| 서버 데이터 타입 | 정수, 포인터, 동기화 타입은 **`ServerCore/Types.h`의 별칭**(`Int32`, `UInt64`, `UIntPtr`, `SharedPtr<T>`, `Atomic<T>` 등, 타입 별칭은 PascalCase. 2026-11-11 `int32` → `Int32`로 이름 변경)을 쓴다. `std::int32_t`, `std::uintptr_t`, `std::size_t`, `std::shared_ptr`를 직접 쓰지 않는다. **Types.h에 없는 새 타입이 필요하면 추가하기 전에 사용자에게 먼저 묻는다** |
+| 서버 데이터 타입 | 정수, 포인터, 동기화 타입은 **`ServerCore/Types.h`의 별칭**(`Int32`, `UInt64`, `UIntPtr`, `USize`(= `std::size_t`, STL 할당기 규약 등 크기 인자), `SharedPtr<T>`, `Atomic<T>` 등, 타입 별칭은 PascalCase. 2026-11-11 `int32` → `Int32`로 이름 변경)을 쓴다. `std::int32_t`, `std::uintptr_t`, `std::size_t`, `std::shared_ptr`를 직접 쓰지 않는다. **Types.h에 없는 새 타입이 필요하면 추가하기 전에 사용자에게 먼저 묻는다** |
 | `Windows.h` 범위 | `CorePch.h`와 공개 헤더(`Memory.h` 등)에는 `<Windows.h>`를 넣지 않는다 (클라이언트 엔진까지 매크로가 퍼짐). `.cpp`에서 include하고, Windows 타입이 꼭 필요한 헤더(`MemoryPool.h`)는 **ServerCore 내부 전용**으로 두고 필요한 `.cpp`에서만 include한다 (테스트 파일도 직접 include) |
 | 메모리 블록 규칙 | 모든 할당기는 **16바이트 정렬**을 준다 (x64 malloc, StompAllocator, SLIST). MSVC의 `alignof(std::max_align_t)`는 8이므로 기준으로 쓰지 않는다. `MemoryHeader::allocSize_`는 **헤더 포함 블록 크기**, 풀 안에서는 0 (이중 해제 검사) |
 
