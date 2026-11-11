@@ -31,8 +31,11 @@ int main(int argc, char* argv[])
 	XnewPoolReuse();
 	MakeSharedRefCount();
 	MakeSharedPoolReuse();
+	MakeSharedWeakHoldsBlock();
 	StlAllocatorAllocFree();
 	StlAllocatorContainers();
+	ContainerAliases();
+	ContainerString();
 
 	// 크래시 테스트: 하나씩 주석을 풀고 실행 → 크래시 확인 후 다시 주석 처리
 	// CrashInvalidUnlockOrder();

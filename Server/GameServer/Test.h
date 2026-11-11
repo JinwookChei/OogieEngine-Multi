@@ -25,9 +25,12 @@ void MemoryConcurrent();          // 스레드 4개가 크기 5종을 함께 들
 void PoolAllocatorAllocFree();    // PoolAllocator 직접 호출: 16바이트 정렬, 읽기/쓰기, 재할당 시 같은 주소, nullptr 해제
 void XnewPoolReuse();             // Release 전용: xnew → xdelete → xnew가 같은 주소인지 (Debug는 SKIP)
 void MakeSharedRefCount();        // 생성자 인자 전달, use_count 변화, 마지막 참조가 사라질 때만 소멸자 1회
-void MakeSharedPoolReuse();       // Release 전용: MakeShared 객체를 reset → xnew가 같은 주소인지 (Debug는 SKIP)
+void MakeSharedPoolReuse();       // Release 전용: MakeShared 객체를 reset → 다음 MakeShared가 같은 주소인지 (Debug는 SKIP)
+void MakeSharedWeakHoldsBlock();  // Release 전용: weak_ptr가 남으면 소멸자는 불려도 블록은 반납되지 않고, weak_ptr 해제 후 반납되는지 (Debug는 SKIP)
 void StlAllocatorAllocFree();     // StlAllocator 직접 호출: 16바이트 정렬, 10개 읽기/쓰기, 해제
 void StlAllocatorContainers();    // vector 1~1000 push_back 합계, map 1000개 삽입 후 짝수 키 erase → 크기/값 검증
+void ContainerAliases();          // Container.h 별칭: Vector/List/Deque/Map/Set/HashMap/HashSet/Queue/Stack/PriorityQueue 기본 동작
+void ContainerString();           // String/WString: 짧은 문자열, 긴 문자열, 이어 붙이기
 
 /*
 	크래시 테스트: 호출하면 반드시 크래시가 나야 정상이다. 한 번에 하나만 호출한다.

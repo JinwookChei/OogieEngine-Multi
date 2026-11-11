@@ -76,24 +76,6 @@ void xdelete(Type* pObj)
 }
 
 /*
-		[MakeShared]
-		std::make_shared 대신 쓰는 SharedPtr 생성 함수.
-		- 객체는 xnew(DefaultAllocator)로 만들고, 삭제자로 xdelete<Type>을 넘긴다
-		  → 마지막 참조가 사라질 때 delete가 아니라 xdelete로 해제되어 할당/해제 짝이 맞는다.
-		- 삭제자는 생성할 때 컨트롤 블록에 저장된다. 부모 타입 SharedPtr로 옮겨 담아도 xdelete<Type>(실제 타입)이 불린다.
-		- 컨트롤 블록(참조 카운트 + 삭제자)은 아직 표준 라이브러리의 기본 new로 따로 할당된다 (StlAllocator 이후 개선).
-		- xnew와 같이 CoreGlobal이 살아 있는 동안에만 쓴다 (Release는 GMemory를 쓴다).
-*/
-template<typename Type, typename... Args>
-SharedPtr<Type> MakeShared(Args&&... args)
-{
-	Type* pObj = xnew<Type>(std::forward<Args>(args)...);
-	ASSERT_CRASH(pObj != nullptr);
-
-	return SharedPtr<Type>(pObj, xdelete<Type>);
-}
-
-/*
 		[StlAllocator]
 		STL 컨테이너(vector, map ...)가 내부 메모리를 DefaultAllocator에서 받게 하는 어댑터.
 		  예) std::vector<Int32, StlAllocator<Int32>>
@@ -147,4 +129,20 @@ template<typename T, typename U>
 bool operator!=(const StlAllocator<T>&, const StlAllocator<U>&)
 {
 	return false;
+}
+
+/*
+		[MakeShared]
+		std::make_shared 대신 쓰는 SharedPtr 생성 함수.
+		- std::allocate_shared + StlAllocator로 컨트롤 블록(참조 카운트)과 객체를 한 덩어리로, 한 번에 DefaultAllocator에서 받는다.
+		  (StlAllocator<Type>은 "컨트롤 블록 + Type" 타입용 할당기로 rebind되어 쓰인다)
+		- 강한 참조가 0이 되면 소멸자가 불리고, weak_ptr까지 0이 되어야 메모리가 반납된다 (한 덩어리라 따로 돌려줄 수 없다).
+		- 컨트롤 블록이 실제 타입(Type)을 기억하므로, 부모 타입 SharedPtr로 옮겨 담아도 Type의 소멸자가 불린다.
+		- 표준 라이브러리 안에서 생성자를 부르므로 Type의 생성자는 public이어야 한다.
+		- xnew와 같이 CoreGlobal이 살아 있는 동안에만 쓴다 (Release는 GMemory를 쓴다).
+*/
+template<typename Type, typename... Args>
+SharedPtr<Type> MakeShared(Args&&... args)
+{
+	return std::allocate_shared<Type>(StlAllocator<Type>(), std::forward<Args>(args)...);
 }

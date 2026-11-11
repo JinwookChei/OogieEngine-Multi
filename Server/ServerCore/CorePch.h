@@ -19,3 +19,4 @@
 #include "CoreGlobal.h"
 #include "Lock.h"
 #include "Memory.h"
+#include "Container.h"

@@ -797,22 +797,62 @@ void MakeSharedPoolReuse()
 	// Debug의 DefaultAllocator는 StompAllocator라 풀을 거치지 않는다
 	std::cout << "[MakeSharedPoolReuse] SKIP (Debug는 StompAllocator)" << std::endl;
 #else
-	// MakeShared 객체의 메모리가 풀로 돌아갔다면, 같은 크기의 다음 xnew가 그 블록을 그대로 다시 받는다
-	SharedPtr<MemoryTestKnight> pShared = MakeShared<MemoryTestKnight>(100, 10);
-	MemoryTestKnight* pFirst = pShared.get();
-	pShared.reset();
+	// MakeShared의 블록(컨트롤 블록 + 객체)이 풀로 돌아갔다면, 같은 크기의 다음 MakeShared가 그 블록을 그대로 다시 받는다
+	// (xnew와 비교하지 않는다: 블록 크기가 달라 다른 풀에서 나올 수 있다)
+	SharedPtr<MemoryTestKnight> pFirst = MakeShared<MemoryTestKnight>(100, 10);
+	MemoryTestKnight* pFirstAddr = pFirst.get();
+	pFirst.reset();
 
-	MemoryTestKnight* pSecond = xnew<MemoryTestKnight>(200, 20);
-	const bool reused = (pSecond == pFirst);
-	xdelete(pSecond);
+	SharedPtr<MemoryTestKnight> pSecond = MakeShared<MemoryTestKnight>(200, 20);
+	const bool reused = (pSecond.get() == pFirstAddr);
+	const bool constructed = (pSecond->hp_ == 200 && pSecond->attack_ == 20);
+	pSecond.reset();
 
-	if (reused == false)
+	if (reused == false || constructed == false)
 	{
-		std::cout << "[MakeSharedPoolReuse] FAIL : reused " << reused << std::endl;
+		std::cout << "[MakeSharedPoolReuse] FAIL : reused " << reused << ", constructed " << constructed << std::endl;
 		return;
 	}
 
 	std::cout << "[MakeSharedPoolReuse] OK" << std::endl;
+#endif
+}
+
+void MakeSharedWeakHoldsBlock()
+{
+#ifdef _DEBUG
+	// Debug의 DefaultAllocator는 StompAllocator라 풀을 거치지 않는다
+	std::cout << "[MakeSharedWeakHoldsBlock] SKIP (Debug는 StompAllocator)" << std::endl;
+#else
+	MemoryTestKnight::SConstructCount = 0;
+	MemoryTestKnight::SDestructCount = 0;
+
+	// 1) 블록 A를 만들고 weak_ptr만 남긴 채 강한 참조를 모두 해제한다
+	SharedPtr<MemoryTestKnight> pFirst = MakeShared<MemoryTestKnight>(100, 10);
+	MemoryTestKnight* pAddrA = pFirst.get();
+	std::weak_ptr<MemoryTestKnight> weak = pFirst;
+	pFirst.reset();
+	const bool destroyed = (MemoryTestKnight::SDestructCount == 1 && weak.expired());
+
+	// 2) weak_ptr가 남아 있는 동안 새로 만들면 A가 아닌 블록을 받는다
+	SharedPtr<MemoryTestKnight> pSecond = MakeShared<MemoryTestKnight>(200, 20);
+	const bool notReusedWhileWeak = (pSecond.get() != pAddrA);
+	pSecond.reset();
+
+	// 3) weak_ptr까지 해제한 뒤에는 A가 풀 맨 위에 있으므로 다음 MakeShared가 A를 받는다
+	weak.reset();
+	SharedPtr<MemoryTestKnight> pThird = MakeShared<MemoryTestKnight>(300, 30);
+	const bool reusedAfterWeak = (pThird.get() == pAddrA);
+	pThird.reset();
+
+	if (destroyed == false || notReusedWhileWeak == false || reusedAfterWeak == false)
+	{
+		std::cout << "[MakeSharedWeakHoldsBlock] FAIL : destroyed " << destroyed << ", notReusedWhileWeak " << notReusedWhileWeak
+			<< ", reusedAfterWeak " << reusedAfterWeak << std::endl;
+		return;
+	}
+
+	std::cout << "[MakeSharedWeakHoldsBlock] OK" << std::endl;
 #endif
 }
 
@@ -889,6 +929,132 @@ void StlAllocatorContainers()
 	}
 
 	std::cout << "[StlAllocatorContainers] OK" << std::endl;
+}
+
+/*
+	[Memory 테스트] Container.h
+*/
+void ContainerAliases()
+{
+	// 1) Vector: 순서대로 쌓인다
+	Vector<Int32> vec;
+	for (Int32 i = 0; i < 5; ++i)
+		vec.push_back(i);
+	const bool vectorOk = (vec.size() == 5 && vec.front() == 0 && vec.back() == 4);
+
+	// 2) List: 앞뒤로 넣기
+	List<Int32> list;
+	list.push_back(2);
+	list.push_front(1);
+	list.push_back(3);
+	const bool listOk = (list.size() == 3 && list.front() == 1 && list.back() == 3);
+
+	// 3) Deque: 앞뒤로 넣고 앞에서 빼기
+	Deque<Int32> deque;
+	deque.push_back(2);
+	deque.push_front(1);
+	deque.pop_front();
+	const bool dequeOk = (deque.size() == 1 && deque.front() == 2);
+
+	// 4) Map: 키 순서로 정렬, 찾기
+	Map<Int32, Int32> map;
+	map[3] = 30;
+	map[1] = 10;
+	map[2] = 20;
+	const bool mapOk = (map.size() == 3 && map.begin()->first == 1 && map.find(2) != map.end() && map.find(2)->second == 20 && map.find(4) == map.end());
+
+	// 5) Set: 중복은 무시, 키 순서로 정렬
+	Set<Int32> set;
+	set.insert(2);
+	set.insert(1);
+	set.insert(2);
+	const bool setOk = (set.size() == 2 && *set.begin() == 1);
+
+	// 6) HashMap: 넣고 찾기
+	HashMap<Int32, Int32> hashMap;
+	for (Int32 i = 0; i < 100; ++i)
+		hashMap[i] = i * 2;
+	const bool hashMapOk = (hashMap.size() == 100 && hashMap.at(50) == 100 && hashMap.count(100) == 0);
+
+	// 7) HashSet: 중복은 무시
+	HashSet<Int32> hashSet;
+	hashSet.insert(7);
+	hashSet.insert(7);
+	hashSet.insert(8);
+	const bool hashSetOk = (hashSet.size() == 2 && hashSet.count(7) == 1);
+
+	// 8) Queue: 먼저 넣은 것이 먼저 나온다 (FIFO)
+	Queue<Int32> queue;
+	queue.push(1);
+	queue.push(2);
+	queue.push(3);
+	const bool queueFrontOk = (queue.front() == 1);
+	queue.pop();
+	const bool queueOk = (queueFrontOk && queue.front() == 2 && queue.size() == 2);
+
+	// 9) Stack: 나중에 넣은 것이 먼저 나온다 (LIFO)
+	Stack<Int32> stack;
+	stack.push(1);
+	stack.push(2);
+	stack.push(3);
+	const bool stackTopOk = (stack.top() == 3);
+	stack.pop();
+	const bool stackOk = (stackTopOk && stack.top() == 2 && stack.size() == 2);
+
+	// 10) PriorityQueue: 큰 값부터 나온다
+	PriorityQueue<Int32> priorityQueue;
+	priorityQueue.push(5);
+	priorityQueue.push(1);
+	priorityQueue.push(9);
+	priorityQueue.push(3);
+	Vector<Int32> popped;
+	while (priorityQueue.empty() == false)
+	{
+		popped.push_back(priorityQueue.top());
+		priorityQueue.pop();
+	}
+	const bool priorityQueueOk = (popped.size() == 4 && popped[0] == 9 && popped[1] == 5 && popped[2] == 3 && popped[3] == 1);
+
+	if (vectorOk == false || listOk == false || dequeOk == false || mapOk == false || setOk == false
+		|| hashMapOk == false || hashSetOk == false || queueOk == false || stackOk == false || priorityQueueOk == false)
+	{
+		std::cout << "[ContainerAliases] FAIL : vector " << vectorOk << ", list " << listOk << ", deque " << dequeOk
+			<< ", map " << mapOk << ", set " << setOk << ", hashMap " << hashMapOk << ", hashSet " << hashSetOk
+			<< ", queue " << queueOk << ", stack " << stackOk << ", priorityQueue " << priorityQueueOk << std::endl;
+		return;
+	}
+
+	std::cout << "[ContainerAliases] OK" << std::endl;
+}
+
+void ContainerString()
+{
+	// 1) 짧은 문자열
+	String shortText = "Hello";
+	const bool shortOk = (shortText.size() == 5 && shortText == "Hello");
+
+	// 2) 긴 문자열 (16자 이상)
+	String longText = "OogieEngine Server Memory";
+	const bool longOk = (longText.size() == 25 && longText == "OogieEngine Server Memory");
+
+	// 3) 이어 붙이기: 짧은 문자열이 길어지는 경우
+	String joined = shortText;
+	joined += ", ";
+	joined += longText;
+	const bool joinOk = (joined == "Hello, OogieEngine Server Memory" && joined.size() == 32);
+
+	// 4) WString
+	WString wideText = L"Wide";
+	wideText += L" String Test 1234";
+	const bool wideOk = (wideText == L"Wide String Test 1234" && wideText.size() == 21);
+
+	if (shortOk == false || longOk == false || joinOk == false || wideOk == false)
+	{
+		std::cout << "[ContainerString] FAIL : short " << shortOk << ", long " << longOk << ", join " << joinOk << ", wide " << wideOk << std::endl;
+		return;
+	}
+
+	std::cout << "[ContainerString] OK" << std::endl;
 }
 
 void CrashMemoryDoubleRelease()
