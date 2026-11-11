@@ -65,7 +65,8 @@ p { margin: 0; max-width: 68ch; }
 code, .mono { font-family: var(--f-mono); font-size: 0.88em; }
 code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
-.scroll { overflow-x: auto; }
+/* 가로로 넓은 그림만 스크롤. overflow-x만 주면 세로도 auto가 되어 작은 넘침에 세로 스크롤바가 생기므로 막는다 */
+.scroll { overflow-x: auto; overflow-y: hidden; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
 .legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
 .chip { display: inline-block; font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; vertical-align: 1px; white-space: nowrap; }
@@ -96,7 +97,9 @@ code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
 .cell.f { background: repeating-linear-gradient(135deg, var(--free-soft) 0 6px, transparent 6px 12px); color: var(--free); }
 .ruler { display: flex; font-family: var(--f-mono); font-size: 11px; color: var(--muted); min-width: 560px; margin-top: 4px; }
 .ruler span { position: relative; }
-.pointer { font-family: var(--f-mono); font-size: 12px; color: var(--accent); min-width: 560px; display: flex; }
+/* 띠 위 화살표: 줄마다 하나씩, 띠와 같은 % 위치에 둔다 (폭이 0인 칸에 글자를 넣으면 한 글자씩 세로로 쪼개진다) */
+.pointer { position: relative; height: 20px; font-family: var(--f-mono); font-size: 12px; color: var(--accent); min-width: 560px; }
+.pointer span { position: absolute; top: 0; white-space: nowrap; }
 .states { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; font-size: 13.5px; }
 .kv dt { font-family: var(--f-mono); color: var(--muted); }
@@ -159,8 +162,9 @@ tr.dim td { color: var(--muted); }
 /* ── 5. 순서 ── */
 .steps2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 ol.steps { margin: 0; padding-left: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 8px; }
-ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 8px; font-size: 14px; }
-ol.steps li::before { content: counter(s); font-family: var(--f-mono); font-size: 12px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--free-soft); color: var(--muted); margin-top: 1px; }
+/* 번호는 왼쪽에 절대 위치로 둔다. li를 grid로 만들면 글자와 <code> 조각이 각각 칸으로 흩어진다 */
+ol.steps li { counter-increment: s; position: relative; padding-left: 34px; font-size: 14px; }
+ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; font-family: var(--f-mono); font-size: 12px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--free-soft); color: var(--muted); }
 ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent); }
 
 /* ── 6. 소유 ── */
@@ -241,7 +245,8 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
       <span style="--c: var(--free)">풀 크기에 맞추느라 남는 칸</span>
     </div>
     <div class="scroll">
-      <div class="pointer"><span style="width:0%">▼ 블록 시작 = header (16 정렬)</span><span style="margin-left:auto;margin-right:52%">▼ header + 1 = 사용자 주소</span></div>
+      <div class="pointer"><span style="left:0%">▼ 블록 시작 = header (16 정렬)</span></div>
+      <div class="pointer"><span style="left:18%">▼ header + 1 = 사용자 주소 (블록 시작 + 16)</span></div>
       <div class="strip">
         <div class="cell h" style="width:8%"><b>Next</b>8B</div>
         <div class="cell h" style="width:5%"><b>size</b>4B</div>
