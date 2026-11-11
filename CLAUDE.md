@@ -36,6 +36,7 @@
   - **Step이 끝날 때마다** Plan.md와 함께 갱신한다. 사용자가 답한 확인 질문은 답과 보충 설명을 적고, 미답변은 `(미답변)`으로 남긴다 (Claude가 답을 미리 채우지 않는다).
   - 사용자의 MEMO 주석 내용은 "📝 내 메모"로 옮겨 적을 수 있다 (코드의 MEMO는 건드리지 않는다). 강의 코드 원문은 넣지 않는다.
 - **Notion 업로드** (`notion-sync` 스킬, `.claude/skills/notion-sync/SKILL.md`): **파트(Plan.md의 Phase 단위, 예: Phase 1-3)가 끝나** Docs/Study, Docs/Diagrams, Plan.md 갱신을 마치면, 학습 내용을 Notion `[ 프로젝트 정리 ] → OogieEngine Server`에 올릴지 **사용자에게 묻는다**. 동의하면 스킬 절차대로 올리고, 사용자가 원하지 않으면 올리지 않는다. Step 하나가 끝날 때는 묻지 않는다.
+- **인터랙티브 다이어그램** (`study-diagram` 스킬, `.claude/skills/study-diagram/SKILL.md`): 개념을 설명하거나 학습 정리를 쓸 때, 시간에 따라 바뀌는 상태(블록의 일생, Push/Pop, 락 상태 전이, 스레드 실행 순서 겹침)나 입력에 따라 바뀌는 결과(크기 → 풀)처럼 **동적인 시각화가 이해에 필요하면 Claude가 스스로 스킬을 불러** `Docs/Diagrams/Phase<번호>_<주제>.html`을 만들거나 갱신한다 (2026-11-12 사용자 요청). 표 하나로 충분한 개념에는 만들지 않는다. 만든 뒤에는 headless Edge 스크린샷으로 렌더링을 직접 확인하고, 학습 정리의 해당 Step에 링크 한 줄을 넣는다.
 - 사용자가 남긴 **MEMO 주석은 사용자의 학습 메모**다. 형식은 `/* MEMO: ... */` 블록 주석(여러 줄)이고, `// MEMO:` 한 줄 형식도 같은 규칙으로 다룬다. Claude는 이를 수정, 삭제, 이동하지 않는다 (리뷰에서 내용이 틀렸으면 대화로만 지적한다). 코드 예시를 다시 제시할 때도 기존 MEMO는 그대로 둔다.
 
 ## 저장소 구조
@@ -45,8 +46,8 @@ Server/             OogieEngine_Server (작성 예정) — ServerCore / GameServ
 MMOServer_example/  강의 소스 (참고용, git 제외)
 Plan.md             로드맵 + 할 일 체크리스트
 Docs/Study/         학습 정리 문서 (Notion 가져오기용 Markdown, Phase별)
-Docs/Diagrams/      학습용 인터랙티브 다이어그램 (HTML, Phase별)
-.claude/skills/     프로젝트 스킬 (notion-sync: 학습 정리 → Notion 업로드)
+Docs/Diagrams/      학습용 인터랙티브 다이어그램 (HTML, Phase별, study-diagram 스킬로 작성)
+.claude/skills/     프로젝트 스킬 (notion-sync: 학습 정리 → Notion 업로드 / study-diagram: 인터랙티브 다이어그램 HTML)
 ```
 
 ## Client(OogieEngine) 분석 요약

@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>주제 이름</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* 색은 의미로만 쓴다: header(메타·풀 안) / data(사용자 데이터·사용 중) / free(빈칸·낭비) / accent(포인터·현재 선택) / danger(크래시·Debug) */
+:root {
+  --bg: #f3f5f7; --surface: #ffffff; --ink: #18212b; --muted: #5b6876; --line: #d3dae2;
+  --header: #0f7b72; --header-soft: #d5efec;
+  --data: #2f5fb3; --data-soft: #dce6f8;
+  --free: #8a96a3; --free-soft: #e7ebef;
+  --accent: #c26a12; --accent-soft: #f7e6d3;
+  --danger: #b83a3a;
+  --f-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", Consolas, "D2Coding", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171d; --surface: #1a2129; --ink: #e4e9ef; --muted: #98a5b3; --line: #2f3a46;
+    --header: #3cc2b5; --header-soft: #173a38; --data: #7aa2f0; --data-soft: #1e2c47;
+    --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171d; --surface: #1a2129; --ink: #e4e9ef; --muted: #98a5b3; --line: #2f3a46;
+  --header: #3cc2b5; --header-soft: #173a38; --data: #7aa2f0; --data-soft: #1e2c47;
+  --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.65; }
+.wrap {
+  max-width: 920px; margin: 0 auto; padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 44px;
+}
+header h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); max-width: 65ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h2 { font-size: 20px; margin: 0; text-wrap: balance; }
+h3 { font-size: 15px; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+.muted { color: var(--muted); }
+code, .mono { font-family: var(--f-mono); font-size: 0.88em; font-variant-numeric: tabular-nums; }
+code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.scroll { overflow-x: auto; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.chip { display: inline-block; font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; vertical-align: 1px; white-space: nowrap; }
+.chip.done { color: var(--header); }
+.chip.now { color: var(--accent); }
+.chip.next { color: var(--muted); }
+button { font: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ── 단계 재생기 ── */
+.stepper { display: flex; flex-direction: column; gap: 12px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.controls button { font-family: var(--f-mono); font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.controls button:hover { border-color: var(--accent); color: var(--accent); }
+.controls button:disabled { opacity: 0.4; cursor: default; }
+.controls .pos { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.caption { font-size: 14px; min-height: 2.6em; }
+.caption b { color: var(--accent); }
+.stage { min-height: 120px; }
+
+/* ── 예시 그림: 블록 스택 ── */
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.blk { font-family: var(--f-mono); font-size: 12px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--header); background: var(--header-soft); color: var(--header); transition: background .2s, border-color .2s, color .2s; }
+.blk.used { border-color: var(--data); background: var(--data-soft); color: var(--data); }
+.blk.hot { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.tag { font-family: var(--f-mono); font-size: 11px; color: var(--muted); min-width: 64px; }
+
+@media (max-width: 720px) { header h1 { font-size: 25px; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">OogieEngine Server · Phase X-Y</div>
+  <h1>주제 이름</h1>
+  <p>이 그림이 무엇을 보여 주는지 한두 문장. <span class="chip done">완료</span> <span class="chip now">작성 중</span> <span class="chip next">예정</span></p>
+</header>
+
+<!-- 1. 단계 재생기 예시 — 프레임 배열만 바꿔서 쓴다 -->
+<section>
+  <h2>1. 섹션 제목</h2>
+  <p class="muted">▶ 다음을 눌러 한 단계씩 본다. 주소창 끝에 <code>#step=3</code>을 붙이면 3단계부터 시작한다.</p>
+  <div class="panel stepper" id="demoStepper">
+    <div class="legend">
+      <span style="--c: var(--header)">풀 안</span>
+      <span style="--c: var(--data)">사용 중</span>
+      <span style="--c: var(--accent)">방금 바뀜</span>
+    </div>
+    <div class="controls">
+      <button type="button" data-act="first" aria-label="처음으로">⟲ 처음</button>
+      <button type="button" data-act="prev" aria-label="이전 단계">◀ 이전</button>
+      <button type="button" data-act="next" aria-label="다음 단계">다음 ▶</button>
+      <button type="button" data-act="play" aria-pressed="false">⏯ 자동</button>
+      <span class="pos" data-role="pos"></span>
+    </div>
+    <div class="caption" data-role="caption" aria-live="polite"></div>
+    <div class="stage scroll" data-role="stage"></div>
+  </div>
+</section>
+
+</div>
+
+<script>
+// 단계 재생기: frames = [{ caption: "HTML 문자열", render: function (stage) { stage.innerHTML = ...; } }, ...]
+function Stepper(root, frames, intervalMs) {
+  var index = 0, timer = null;
+  var pos = root.querySelector('[data-role="pos"]');
+  var caption = root.querySelector('[data-role="caption"]');
+  var stage = root.querySelector('[data-role="stage"]');
+  var btn = {};
+  root.querySelectorAll('[data-act]').forEach(function (b) { btn[b.getAttribute('data-act')] = b; });
+
+  function show(i) {
+    index = Math.max(0, Math.min(frames.length - 1, i));
+    caption.innerHTML = frames[index].caption;
+    frames[index].render(stage);
+    pos.textContent = (index + 1) + ' / ' + frames.length;
+    btn.first.disabled = btn.prev.disabled = (index === 0);
+    btn.next.disabled = (index === frames.length - 1);
+    if (index === frames.length - 1) stop();
+  }
+  function stop() { if (timer) { clearInterval(timer); timer = null; } btn.play.setAttribute('aria-pressed', 'false'); }
+  function play() {
+    if (timer) { stop(); return; }
+    if (index === frames.length - 1) show(0);
+    btn.play.setAttribute('aria-pressed', 'true');
+    timer = setInterval(function () { show(index + 1); }, intervalMs || 1200);
+  }
+  btn.first.addEventListener('click', function () { stop(); show(0); });
+  btn.prev.addEventListener('click', function () { stop(); show(index - 1); });
+  btn.next.addEventListener('click', function () { stop(); show(index + 1); });
+  btn.play.addEventListener('click', play);
+
+  // #step=N 으로 시작 단계 지정 (스크린샷 확인용)
+  var m = /step=(\d+)/.exec(location.hash);
+  show(m ? Number(m[1]) - 1 : 0);
+}
+
+// 예시 프레임: 블록 목록을 그리는 도우미
+function blocks(list) {
+  return '<div class="row">' + list.map(function (b) {
+    return '<span class="blk ' + (b.cls || '') + '">' + b.name + '</span>';
+  }).join('') + '</div>';
+}
+
+Stepper(document.getElementById('demoStepper'), [
+  { caption: '처음: 풀이 비어 있다.', render: function (s) { s.innerHTML = '<span class="tag">풀</span> (비어 있음)'; } },
+  { caption: '<b>Pop</b> 2번: 풀이 비어 새 블록 A, B를 만든다.', render: function (s) { s.innerHTML = blocks([{ name: 'A', cls: 'used hot' }, { name: 'B', cls: 'used hot' }]); } },
+  { caption: '<b>Push</b> A, B: 해제하지 않고 풀에 보관한다.', render: function (s) { s.innerHTML = blocks([{ name: 'B (맨 위)', cls: 'hot' }, { name: 'A' }]); } }
+]);
+</script>
+</body>
+</html>
