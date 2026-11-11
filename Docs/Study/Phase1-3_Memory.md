@@ -12,6 +12,8 @@
 | 4-2 | `Allocator.h/.cpp`, `Memory.h` | PoolAllocator (Release의 `DefaultAllocator` 교체) | ✅ |
 | 5 | `Memory.h` | MakeShared (`xnew` + 삭제자 `xdelete<Type>`로 SharedPtr 생성) | ✅ |
 | 6-1 | `Memory.h`, `Types.h` | StlAllocator (STL 컨테이너가 `DefaultAllocator`를 쓰게 하는 어댑터, `USize` 별칭) | ✅ |
+| 6-2 | `Memory.h` | MakeShared → `std::allocate_shared` + `StlAllocator` (컨트롤 블록 + 객체를 한 번에) | ✅ |
+| 7 | `Container.h`, `CorePch.h` | 컨테이너 별칭 (`Vector`, `Map`, `HashMap`, `Queue`, `String` ...) | ✅ |
 
 ---
 
@@ -1182,3 +1184,206 @@ using USize = std::size_t;   // STL 할당기 규약의 크기 인자 등
 - `using value_type = Type;`은 왜 쓰나? → STL 할당기 규약에서 유일하게 반드시 있어야 하는 타입 이름이다. `allocator_traits`가 이것을 기준으로 나머지 타입을 자동으로 채우고, 컨테이너가 자기 원소 타입과 같은지 검사한다. 없으면 컨테이너에 넣는 순간 컴파일 오류.
 - `deallocate(Type* pPtr, USize /* count */)`에서 이름을 왜 주석 처리했나? → 규약 때문에 받아야 하지만 쓰지 않는 값이다. 이름을 지워 경고를 막고, 주석으로 의미는 남긴다.
 - `==`/`!=`도 꼭 써야 하나? → C++17 규약의 필수 항목이다. move 대입, `swap`, `splice`처럼 메모리 소유권을 옮길 때 쓰일 수 있고, 템플릿이라 그때 가서야 오류가 나므로 처음부터 채워 둔다. 실행 비용은 0.
+
+---
+
+## Step 6-2. MakeShared → allocate_shared
+
+### 🎯 목표
+`MakeShared`가 `std::allocate_shared` + `StlAllocator`를 써서 **컨트롤 블록과 객체를 한 번의 할당으로, 우리 할당기에서** 받게 바꾼다. Step 5에서 남긴 한계(컨트롤 블록은 기본 `new`)를 없앤다.
+
+### 📖 개념 1 — 두 방식 비교 (설계 결정)
+```
+[Step 5]   MakeShared = xnew + 삭제자 xdelete
+  객체        ──▶ 우리 할당기 (Stomp/Pool)
+  컨트롤 블록 ──▶ 기본 new (CRT 힙)          ← 할당 2번, 서로 다른 곳
+
+[Step 6-2] MakeShared = std::allocate_shared<Type>(StlAllocator<Type>(), args...)
+  [ 컨트롤 블록 | 객체 ] ──▶ 우리 할당기     ← 할당 1번, 한 덩어리
+```
+
+| | xnew + 삭제자 | allocate_shared |
+|---|---|---|
+| 할당 횟수 | 2번 | **1번** (카운트와 객체가 붙어 있어 캐시에도 유리) |
+| 컨트롤 블록 위치 | CRT 힙 (우리 시스템 밖) | **우리 할당기** (Debug면 Stomp 검사도 받음) |
+| 해제 | 강한 참조 0 → 객체 메모리 즉시 반납 | 강한 참조 0 → 소멸자만, **weak_ptr까지 0 → 메모리 반납** |
+| 생성자 | `xnew`가 호출 | 표준 라이브러리 내부가 호출 → **public 생성자 필요** |
+
+→ `weak_ptr` 때문에 블록 반납이 늦어지는 것은 우리 서버에서 영향이 작다고 판단하고 **allocate_shared로 결정**했다 (2026-11-11).
+
+> 💡 **비유**: 이삿짐 박스와 송장. 송장(컨트롤 블록: 참조 수 + 내용물 타입)을 박스(객체)에 붙여서 한 번에 배송받는다.
+
+### 📖 개념 2 — 호출 하나가 안에서 하는 일
+```
+MakeShared<Knight>(100, 10)
+  ① 크기 계산: [컨트롤 블록 | Knight] 한 덩어리
+  ② StlAllocator<Knight> → "덩어리 타입"용 할당기로 rebind (Step 6-1의 변환 생성자)
+  ③ allocate(1) → DefaultAllocator::Alloc(덩어리 크기)   ← 할당은 이 한 번뿐
+  ④ 컨트롤 블록 초기화 (강한 참조 1, 약한 참조 1)
+  ⑤ 덩어리 안의 Knight 자리에 Knight(100, 10) 생성
+```
+
+### 📖 개념 3 — 해제는 두 단계
+| 시점 | 일어나는 일 |
+|---|---|
+| 강한 참조(`SharedPtr`)가 0 | **소멸자 호출**. 객체로서는 끝 |
+| 약한 참조(`weak_ptr`)까지 0 | **메모리 반납** (`deallocate` → 풀) |
+
+- `weak_ptr`가 "아직 살아 있나?"에 답하려면 참조 수가 적힌 컨트롤 블록이 남아 있어야 한다. 한 덩어리라 객체 부분만 떼어 돌려줄 수 없다.
+
+### 📖 개념 4 — StlAllocator는 컨테이너 전용이 아니다
+- "STL 할당기"는 **표준 라이브러리의 할당기 규약**을 따른다는 뜻이다. 컨테이너뿐 아니라 `std::allocate_shared`, `std::basic_string` 등 할당기를 받는 표준 기능 어디에든 꽂힌다.
+- 실제 메모리는 모두 같은 곳(`DefaultAllocator` → Debug: Stomp / Release: Pool)에서 온다.
+```
+xnew<T>(...)                  ────────────────────────────┐
+std::vector<T, StlAllocator>  ─▶ StlAllocator ─▶ DefaultAllocator ─┬─ Debug   → StompAllocator
+MakeShared<T>(...)            ─▶ StlAllocator ─┘                   └─ Release → PoolAllocator → GMemory
+```
+
+| 상황 | 쓰는 것 |
+|---|---|
+| 한 곳에서만 소유 (수명이 분명) | `xnew` / `xdelete` |
+| 여러 곳이 함께 붙잡음 (세션, Room, Job) | `MakeShared` |
+| 컨테이너 | `std::vector<T, StlAllocator<T>>` (→ `Container.h` 별칭) |
+
+> 💡 **비유**: 표준 규격(USB-C)에 맞춘 충전기는 "휴대폰용"으로 샀어도 같은 포트가 있는 노트북에도 꽂힌다.
+
+### 🧱 핵심 코드
+```cpp
+// Memory.h — StlAllocator가 먼저 선언되어 있어야 하므로 그 아래에 둔다
+template<typename Type, typename... Args>
+SharedPtr<Type> MakeShared(Args&&... args)
+{
+	return std::allocate_shared<Type>(StlAllocator<Type>(), std::forward<Args>(args)...);
+}
+```
+
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| (설계 예상) `MakeShared`를 `StlAllocator` 위에 둔 채로 바꾸기 | `StlAllocator` 이름을 찾지 못해 컴파일 오류 | 템플릿도 쓰는 이름은 먼저 선언되어 있어야 한다 → 순서: `xnew`/`xdelete` → `StlAllocator` → `MakeShared` |
+| (테스트) `MakeSharedPoolReuse`가 `xnew`와 주소를 비교 | 블록 크기가 "컨트롤 블록 + 객체"로 커져 다른 풀에서 나올 수 있음 | 재사용 비교는 같은 크기의 할당끼리 (`MakeShared` ↔ `MakeShared`) |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `MakeSharedRefCount` | (수정 없음) 생성자 인자, `use_count`, 마지막 참조에서 소멸자 1회 | `OK` (Debug/Release) — 바깥 동작이 같아 그대로 통과 |
+| `MakeSharedPoolReuse` | (수정) `MakeShared` → `reset()` → 다음 `MakeShared`가 같은 주소, 생성자 인자 전달 | Release `OK`, Debug `SKIP` |
+| `MakeSharedWeakHoldsBlock` | (신규) ① weak만 남기고 `reset()` → 소멸자 1회, `expired()` ② 그동안 새 `MakeShared`는 다른 주소 ③ weak 해제 후 다음 `MakeShared`가 원래 주소 | Release `OK`, Debug `SKIP` |
+
+```
+MakeSharedWeakHoldsBlock — 풀 맨 위 따라가기
+ ① p1(A) 생성 → weak = p1 → p1.reset()   : ~Knight() 호출, A는 weak가 붙잡음 (풀에 없음)
+ ② p2 생성 → A가 아닌 B → p2.reset()      : 풀 [ B ]
+ ③ weak.reset()                          : 풀 [ B, A ← 맨 위 ] → p3가 A를 받음
+```
+
+> 📝 2026-11-11: Step 6-2 코드(`MakeShared` 변경, 주석)와 테스트는 사용자 요청으로 Claude가 작성했다. Debug는 Stomp가 페이지를 OS에 바로 돌려주므로 "같은 주소 재사용 = 풀 반납" 판단이 의미 없어 `SKIP`한다.
+
+### 🧩 복습 질문
+**Q1. `allocate_shared`로 만든 객체에 `weak_ptr` 하나만 남고 `SharedPtr`는 모두 사라졌다. 소멸자와 메모리 반납은 각각 언제 일어날까? Step 5 방식(`xnew` + 삭제자)이었다면 무엇이 달랐을까?**
+> (미답변) — 테스트 `MakeSharedWeakHoldsBlock`과 개념 3이 답의 대부분을 드러낸다.
+
+**Q2. 이제 `MakeShared`에 `xdelete<Type>` 삭제자가 없다. 그래도 `SharedPtr<Base> p = MakeShared<Knight>();`의 마지막 참조가 사라질 때 `~Knight()`가 불릴까? 누가 그것을 알고 있을까?**
+> (미답변) — `Memory.h`의 `[MakeShared]` 주석이 답을 드러낸다.
+
+**📝 세션 중 질문과 답**
+- `MakeShared`를 쓰면 `StlAllocator`를 쓰게 되나? `StlAllocator`는 STL용 아닌가? → 그렇다. `std::allocate_shared`도 할당기 규약을 받는 표준 라이브러리 함수라 같은 할당기가 꽂힌다. 실제 메모리는 `xnew`, 컨테이너와 같은 `DefaultAllocator`에서 온다 (개념 4).
+
+---
+
+## Step 7. Container.h
+
+### 🎯 목표
+`std::vector<T, StlAllocator<T>>`처럼 긴 이름을 `Vector<T>` 같은 **짧은 별칭**으로 묶어, 서버 코드 어디서나 우리 할당기를 쓰는 컨테이너를 쉽게 쓰게 한다.
+
+### 📖 개념 1 — 템플릿 별칭
+```cpp
+template<typename Type>
+using Vector = std::vector<Type, StlAllocator<Type>>;
+```
+- `Vector<Int32>`는 컴파일러가 `std::vector<Int32, StlAllocator<Int32>>`로 바꿔 읽는다. 새 타입이 아니라 **이름만 짧게** 하는 것이라 실행 비용이 0이다.
+- 할당기를 빠뜨리는 실수가 사라진다. 서버 코드에서는 `std::` 컨테이너를 직접 쓰지 않고 이 별칭만 쓴다.
+
+### 📖 개념 2 — 컨테이너마다 할당기 자리가 다르다
+| 별칭 | 원래 타입 | 할당기가 받는 타입 |
+|---|---|---|
+| `Vector<T>`, `List<T>`, `Deque<T>` | `std::vector`, `std::list`, `std::deque` | `T` |
+| `Map<K, V, Pred = std::less<K>>` | `std::map` | **`std::pair<const K, V>`** |
+| `Set<K, Pred>` | `std::set` | `K` |
+| `HashMap<K, V, Hasher, KeyEq>` | `std::unordered_map` | **`std::pair<const K, V>`** |
+| `HashSet<K, Hasher, KeyEq>` | `std::unordered_set` | `K` |
+| `Queue<T>`, `Stack<T>`, `PriorityQueue<T>` | `std::queue`, `std::stack`, `std::priority_queue` | **할당기 자리가 없음** → 안쪽 컨테이너를 바꾼다 |
+| `String`, `WString` | `std::basic_string<char>` / `<wchar_t>` | `char` / `wchar_t` |
+
+- `Map`, `HashMap`은 비교/해시 함수에 기본값을 줘서 보통은 `Map<Int32, Int32>`처럼 두 개만 쓴다.
+
+### 📖 개념 3 — 어댑터는 안쪽 컨테이너를 바꾼다
+- `std::queue<T, Container>`의 두 번째 인자는 할당기가 아니라 **안에 담을 컨테이너 타입**이다. 어댑터는 메모리를 직접 관리하지 않고 안쪽 컨테이너(기본값 `std::deque`)에 맡긴다.
+- 그래서 안쪽 컨테이너의 기본값을 우리 `Deque<T>`(`PriorityQueue`는 `Vector<T>`)로 바꿔 준다. `Deque`/`Vector` 별칭이 먼저 선언되어 있어야 기본값으로 쓸 수 있다.
+- `typename Container::value_type`의 `typename`은 "템플릿 인자 안의 이 이름은 타입이다"라고 컴파일러에 알려 주는 표시다.
+
+> 💡 **비유**: `Queue`는 줄 서는 규칙(앞에서 꺼내고 뒤에 넣기)일 뿐이고, 실제 의자(메모리)는 안쪽 `Deque`가 갖고 있다. 의자를 우리 가구점(할당기)에서 사 오려면 의자 주인인 `Deque`를 바꿔야 한다.
+
+### 📖 개념 4 — 짧은 문자열은 할당하지 않는다 (SSO)
+```
+String 객체 안 (32바이트)
+┌────────────────────────────────┬──────────┬──────────┐
+│ 내부 버퍼 16바이트              │ 길이      │ 용량      │
+│ "Hello\0"  ← 여기에 바로 저장   │ 5        │ 15       │
+└────────────────────────────────┴──────────┴──────────┘
+   15자를 넘으면 이 자리에 힙 주소를 넣고 allocate 호출
+```
+- MSVC `std::basic_string`은 객체 안에 16바이트 버퍼를 갖는다 (`xstring`의 `_BUF_SIZE = 16 / sizeof(문자)`로 확인). `String`은 **15자**, `WString`(wchar_t 2바이트)은 **7자**까지 할당 없이 저장한다.
+- 서버의 문자열(이름, 키, 짧은 명령어)은 대부분 짧아서 이 최적화가 크다.
+- ⚠️ 그래서 문자열 테스트는 **16자 이상**과 **이어 붙여서 길어지는 경우**를 따로 해야 할당기를 실제로 거친다. 짧은 문자열만 테스트하면 할당기 연결이 틀려도 통과한다.
+
+### 🧱 핵심 코드
+```cpp
+// Container.h (일부)
+template<typename Type>
+using Vector = std::vector<Type, StlAllocator<Type>>;
+
+template<typename Key, typename Type, typename Pred = std::less<Key>>
+using Map = std::map<Key, Type, Pred, StlAllocator<std::pair<const Key, Type>>>;
+
+template<typename Key, typename Type, typename Hasher = std::hash<Key>, typename KeyEq = std::equal_to<Key>>
+using HashMap = std::unordered_map<Key, Type, Hasher, KeyEq, StlAllocator<std::pair<const Key, Type>>>;
+
+template<typename Type, typename Container = Deque<Type>>
+using Queue = std::queue<Type, Container>;
+
+template<typename Type, typename Container = Vector<Type>, typename Pred = std::less<typename Container::value_type>>
+using PriorityQueue = std::priority_queue<Type, Container, Pred>;
+
+using String = std::basic_string<char, std::char_traits<char>, StlAllocator<char>>;
+```
+```cpp
+// CorePch.h — GameServer / DummyClient에서 바로 쓰도록
+#include "Memory.h"
+#include "Container.h"
+```
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| `Container.h`를 폴더에만 만들고 프로젝트에 등록 안 됨 (VS 프로젝트 미저장) | 솔루션 탐색기·다른 PC에서 빠짐 | 새 파일은 `.vcxproj`/`.filters` 등록까지 확인 (Claude가 등록) |
+| (확인 질문) 짧은 `String`도 `allocate`를 부른다고 답함 | — | MSVC는 15자까지 객체 안 버퍼에 저장 (SSO). 할당기 테스트는 긴 문자열로 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `ContainerAliases` | 10개 별칭 기본 동작: Vector 순서, List/Deque 앞뒤 넣기, Map/Set 정렬·찾기·중복 무시, HashMap/HashSet 찾기, Queue FIFO, Stack LIFO, PriorityQueue 큰 값부터 | `OK` (Debug/Release) |
+| `ContainerString` | `String` 짧은 문자열(5자) / 긴 문자열(25자) / 이어 붙여 32자, `WString` 4자 → 21자 | `OK` (Debug/Release) |
+
+> 📝 2026-11-11: `Container.h`(별칭, 주석, 프로젝트 등록, CorePch 추가)와 테스트는 사용자 요청으로 Claude가 작성했다.
+
+### 🧩 복습 질문
+**Q1. `Queue`는 왜 `std::queue<Type, StlAllocator<Type>>`처럼 할당기를 바로 넣지 않고 안쪽 컨테이너 `Deque<Type>`을 넣을까?**
+> 🔺 내 답: `Queue`는 내부에서 `Deque`로 구현되어 있기 때문이다.
+> 💬 보충: 핵심은 **`std::queue`에는 할당기 자리가 아예 없다**는 것이다. 두 번째 템플릿 인자는 안에 담을 **컨테이너 타입**이라, `StlAllocator`를 넣으면 컨테이너로 착각해 `push_back`, `front`를 찾다가 컴파일 오류가 난다. 기본값 `std::deque<T>`는 `std::allocator`를 쓰므로, 안쪽 컨테이너를 우리 `Deque<T>`로 바꿔야 메모리가 우리 할당기에서 나온다. `Queue<Int32, List<Int32>>`처럼 다른 안쪽 컨테이너도 쓸 수 있다.
+
+**Q2. `String s = "Hello";`처럼 짧은 문자열을 만들 때 `StlAllocator::allocate`가 불릴까?**
+> ❌ 내 답: 네 (불린다).
+> 💬 정답: **불리지 않는다.** MSVC `std::basic_string`은 객체 안에 16바이트 버퍼를 갖고 있어(SSO), `String`은 15자, `WString`은 7자까지 할당 없이 저장한다. 그보다 길어질 때만 `allocate`를 부른다. 그래서 `ContainerString`은 25자 문자열과 이어 붙여 길어지는 경우를 따로 확인한다.

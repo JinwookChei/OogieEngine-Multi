@@ -11,16 +11,17 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 Step 6-1 `StlAllocator` 완료** (커밋 전). 다음: **Step 6-2** — `MakeShared`를 `std::allocate_shared` + `StlAllocator`로 바꿀지 결정 |
-| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) / Step 4-1 (Memory, GMemory) / Step 4-2 (PoolAllocator, Release의 `DefaultAllocator` 교체) / Step 5 (MakeShared) / Step 6-1 (StlAllocator, `USize`) |
-| 마지막 작업 | 2026-11-11 — 정수 타입 별칭 PascalCase로 변경(`int32` → `Int32`, `SharedPtr<T>` 추가, 커밋 `76e7baa`), Step 5 MakeShared 구현 + 테스트 2개 (`MakeSharedRefCount`, `MakeSharedPoolReuse`), 확인 질문 2개 정리. Notion 업로드 스킬(`notion-sync`) 추가, 학습 정리를 Notion에 Phase 1-3 Step 4-2까지 반영. Step 6-1 StlAllocator + `USize` 별칭 + 테스트 2개 (`StlAllocatorAllocFree`, `StlAllocatorContainers`), 확인 질문 2개 정리 |
-| 남은 숙제 | Step 6-1 커밋 + push. Notion의 Phase 1-3 페이지에서 옛 다이어그램 embed(아래쪽, "Step 4-1 작성 중" 표시) 삭제는 사용자가 직접 |
+| 현재 위치 | **Phase 1-3 Step 7 `Container.h` 완료** (Step 6-2와 함께 커밋 전). 다음: **`ObjectPool<T>`** 안내부터 (Phase 1-3 마지막 Step) |
+| 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) / Step 4-1 (Memory, GMemory) / Step 4-2 (PoolAllocator, Release의 `DefaultAllocator` 교체) / Step 5 (MakeShared) / Step 6-1 (StlAllocator, `USize`) / Step 6-2 (MakeShared → `std::allocate_shared`) / Step 7 (Container.h 별칭) |
+| 마지막 작업 | 2026-11-11 — 정수 타입 별칭 PascalCase로 변경(`int32` → `Int32`, `SharedPtr<T>` 추가, 커밋 `76e7baa`), Step 5 MakeShared 구현 + 테스트 2개 (`MakeSharedRefCount`, `MakeSharedPoolReuse`), 확인 질문 2개 정리. Notion 업로드 스킬(`notion-sync`) 추가, 학습 정리를 Notion에 Phase 1-3 Step 4-2까지 반영. Step 6-1 StlAllocator + `USize` 별칭 + 테스트 2개 (`StlAllocatorAllocFree`, `StlAllocatorContainers`), 확인 질문 2개 정리. Step 6-2 MakeShared를 `allocate_shared`로 변경 + 테스트 수정/추가 (`MakeSharedPoolReuse`, `MakeSharedWeakHoldsBlock`), 코드와 테스트는 사용자 요청으로 Claude가 작성. Step 7 `Container.h` + 테스트 2개 (`ContainerAliases`, `ContainerString`)는 사용자 요청으로 Claude가 작성, 확인 질문 2개 정리. 학습 정리에서 "🔧 강의와 다른 점" 섹션은 앞으로 쓰지 않기로 함 (기존 것은 유지) |
+| 남은 숙제 | Step 6-1 커밋 완료(push 전), Step 6-2 + Step 7 커밋 + push. Notion의 Phase 1-3 페이지에서 옛 다이어그램 embed(아래쪽, "Step 4-1 작성 중" 표시) 삭제는 사용자가 직접 |
 
 **확인 질문 (미답변)**
-- 없음. Phase 1-2 Step 3~6, Phase 1-3 Step 1~2의 미답변 질문은 2026-10-28 사용자 요청으로 Claude가 해설을 채움 (학습 정리 문서의 `💬 (해설 요청)`)
+- Phase 1-3 Step 6-2 Q1(weak_ptr만 남았을 때 소멸자/메모리 반납 시점, Step 5 방식과 차이), Q2(삭제자 없이도 `~Knight()`가 불리는지, 누가 아는지) — 학습 정리에 `(미답변)`
+- 그 외 없음. Phase 1-2 Step 3~6, Phase 1-3 Step 1~2의 미답변 질문은 2026-10-28 사용자 요청으로 Claude가 해설을 채움 (학습 정리 문서의 `💬 (해설 요청)`)
 
 **테스트 현황** (`GameServer/Test.cpp`, Step 4·6에서 사용자 요청으로 Claude가 작성)
-- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete`, `StompAllocFree`, `MemoryHeaderAttachDetach`, `MemoryPoolReuse`, `MemoryPoolConcurrent`, `MemoryAllocReuse`, `MemoryBoundarySizes`, `MemoryConcurrent`, `PoolAllocatorAllocFree`, `MakeSharedRefCount`, `StlAllocatorAllocFree`, `StlAllocatorContainers` → Debug/Release 모두 통과. `XnewPoolReuse`, `MakeSharedPoolReuse` → Release 통과, Debug는 SKIP
+- 정상: `LockReentrancy`, `LockContention`, `NoCycleLock`, `XnewXdelete`, `StompAllocFree`, `MemoryHeaderAttachDetach`, `MemoryPoolReuse`, `MemoryPoolConcurrent`, `MemoryAllocReuse`, `MemoryBoundarySizes`, `MemoryConcurrent`, `PoolAllocatorAllocFree`, `MakeSharedRefCount`, `StlAllocatorAllocFree`, `StlAllocatorContainers`, `ContainerAliases`, `ContainerString` → Debug/Release 모두 통과. `XnewPoolReuse`, `MakeSharedPoolReuse`, `MakeSharedWeakHoldsBlock` → Release 통과, Debug는 SKIP
 - `CrashStompUseAfterFree`(Debug만 AV), `CrashStompOverflow`(Debug/Release 모두 AV) → 사용자 확인 완료 (2026-10-27)
 - `CrashMemoryPoolDoublePush`(ASSERT_CRASH, Debug/Release) → 사용자 확인 완료 (2026-10-28)
 - `CrashMemoryDoubleRelease`(ASSERT_CRASH) → 사용자 확인 완료 (2026-10-31)
@@ -30,8 +31,8 @@
 
 **다음에 할 일**
 0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`)
-1. **Phase 1-3 Step 6-2**: `MakeShared`를 `std::allocate_shared<Type>(StlAllocator<Type>(), ...)`로 바꿔 객체 + 컨트롤 블록을 한 번에 우리 할당기에서 받을지 결정 (장단점: 할당 1회 vs weak_ptr이 남으면 블록 반납이 늦어짐, `MakeSharedPoolReuse` 테스트 수정 필요)
-2. 이후: `Container.h` → `ObjectPool<T>` → Phase 1-3 끝나면 README 전체 그림 갱신 + **Notion 업로드 여부를 사용자에게 묻기** (`notion-sync` 스킬)
+1. **Phase 1-3 Step 8 `ObjectPool<T>`** (Claude가 Step 형식으로 안내 → 사용자 작성 → 리뷰)
+2. Phase 1-3 끝나면 README 전체 그림 갱신 + **Notion 업로드 여부를 사용자에게 묻기** (`notion-sync` 스킬)
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각. **사용자가 "테스트를 작성해 달라"고 요청하면** Claude가 작성하고 Debug/Release 빌드·실행으로 확인한다 (Step 2, 3-1, 3-2는 요청으로 Claude가 작성). 지시할 때는 **테스트 함수 이름과 보조 클래스 이름을 먼저 정해서** 준다. 정상 테스트는 `main`에서 항상 켜 두고, 크래시 테스트(`Crash` 접두사)만 주석으로 둔다. 테스트는 값을 출력만 하지 않고 코드가 비교해서 `OK`/`FAIL`을 낸다.
 
@@ -146,13 +147,13 @@ Phase 9  포트폴리오 정리
 - [x] Step 2 `StompAllocator` (VirtualAlloc, 페이지 끝 배치, 16바이트 정렬) + `Memory.h` `DefaultAllocator`(Debug만 Stomp) — 🔧 강의 결함 #5, 테스트 `StompAllocFree` / `CrashStompUseAfterFree` / `CrashStompOverflow`
 - [x] Step 4-2 `PoolAllocator` (Release의 `DefaultAllocator` 교체, Debug는 Stomp 유지) — 🔧 `nullptr` 해제 규칙 통일, 테스트 `PoolAllocatorAllocFree` / `XnewPoolReuse`
 - [x] Step 6-1 `StlAllocator` (`DefaultAllocator` 사용, rebind 변환 생성자, `USize` 별칭) — 🔧 넘침 검사, 정렬 검사, 테스트 `StlAllocatorAllocFree` / `StlAllocatorContainers`
-- [ ] Step 6-2 `MakeShared` → `std::allocate_shared` 전환 여부 결정
+- [x] Step 6-2 `MakeShared` → `std::allocate_shared` + `StlAllocator` (컨트롤 블록 + 객체 한 번에) — 테스트 `MakeSharedPoolReuse`(수정) / `MakeSharedWeakHoldsBlock`(신규)
 - [x] Step 3-1 `MemoryHeader` (`MemoryPool.h`, SLIST_ENTRY 상속, 16바이트 정렬 `STATIC_ASSERT`, 내부 전용 헤더) — 테스트 `MemoryHeaderAttachDetach`
 - [x] Step 3-2 `MemoryPool` (SLIST lock-free Push/Pop, 사용/예약 카운트) — 🔧 이중 Push 검사, 테스트 `MemoryPoolReuse` / `MemoryPoolConcurrent` / `CrashMemoryPoolDoublePush`
 - [x] Step 4-1 `Memory` (32~4096 크기별 풀 테이블, 큰 블록 직접 할당, `GMemory`) — 🔧 `size` 범위 검사, 이중 해제 검사, 테스트 `MemoryAllocReuse` / `MemoryBoundarySizes` / `MemoryConcurrent` / `CrashMemoryDoubleRelease`
 - [x] Step 5 `MakeShared` (`xnew` + 삭제자 `xdelete<Type>`, 컨트롤 블록은 아직 기본 할당) — 테스트 `MakeSharedRefCount` / `MakeSharedPoolReuse`
 - [ ] `ObjectPool<T>`
-- [ ] `Container.h` (`Vector`, `Map`, `HashMap`, `Queue`, `String` ...)
+- [x] Step 7 `Container.h` (`Vector`, `List`, `Deque`, `Map`, `Set`, `HashMap`, `HashSet`, `Queue`, `Stack`, `PriorityQueue`, `String`, `WString`, CorePch에 추가) — 테스트 `ContainerAliases` / `ContainerString`
 - [x] 테스트: Stomp 모드에서 해제 후 접근(Use-After-Free) 시 즉시 크래시 확인
 
 ### 1-4. 네트워크
