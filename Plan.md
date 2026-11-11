@@ -11,10 +11,10 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 Step 7 `Container.h` 완료** (Step 6-2와 함께 커밋 전). 다음: **`ObjectPool<T>`** 안내부터 (Phase 1-3 마지막 Step) |
+| 현재 위치 | **Phase 1-3 Step 8-1 `ObjectPool<T>` 가이드 전달 완료, 작성 전** (2026-11-12). 다음: 사용자가 아래 "Step 8-1 명세"대로 작성 → 리뷰. 그 뒤 Step 8-2 (`ObjectPool`용 `MakeShared`) |
 | 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) / Step 4-1 (Memory, GMemory) / Step 4-2 (PoolAllocator, Release의 `DefaultAllocator` 교체) / Step 5 (MakeShared) / Step 6-1 (StlAllocator, `USize`) / Step 6-2 (MakeShared → `std::allocate_shared`) / Step 7 (Container.h 별칭) |
 | 마지막 작업 | 2026-11-11 — 정수 타입 별칭 PascalCase로 변경(`int32` → `Int32`, `SharedPtr<T>` 추가, 커밋 `76e7baa`), Step 5 MakeShared 구현 + 테스트 2개 (`MakeSharedRefCount`, `MakeSharedPoolReuse`), 확인 질문 2개 정리. Notion 업로드 스킬(`notion-sync`) 추가, 학습 정리를 Notion에 Phase 1-3 Step 4-2까지 반영. Step 6-1 StlAllocator + `USize` 별칭 + 테스트 2개 (`StlAllocatorAllocFree`, `StlAllocatorContainers`), 확인 질문 2개 정리. Step 6-2 MakeShared를 `allocate_shared`로 변경 + 테스트 수정/추가 (`MakeSharedPoolReuse`, `MakeSharedWeakHoldsBlock`), 코드와 테스트는 사용자 요청으로 Claude가 작성. Step 7 `Container.h` + 테스트 2개 (`ContainerAliases`, `ContainerString`)는 사용자 요청으로 Claude가 작성, 확인 질문 2개 정리. 학습 정리에서 "🔧 강의와 다른 점" 섹션은 앞으로 쓰지 않기로 함 (기존 것은 유지) |
-| 남은 숙제 | Step 6-1 커밋 완료(push 전), Step 6-2 + Step 7 커밋 + push. Notion의 Phase 1-3 페이지에서 옛 다이어그램 embed(아래쪽, "Step 4-1 작성 중" 표시) 삭제는 사용자가 직접 |
+| 남은 숙제 | 없음 (Step 7까지 커밋·push 완료). Notion의 Phase 1-3 페이지에서 옛 다이어그램 embed(아래쪽, "Step 4-1 작성 중" 표시) 삭제는 사용자가 직접 |
 
 **확인 질문 (미답변)**
 - Phase 1-3 Step 6-2 Q1(weak_ptr만 남았을 때 소멸자/메모리 반납 시점, Step 5 방식과 차이), Q2(삭제자 없이도 `~Knight()`가 불리는지, 누가 아는지) — 학습 정리에 `(미답변)`
@@ -31,8 +31,19 @@
 
 **다음에 할 일**
 0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`)
-1. **Phase 1-3 Step 8 `ObjectPool<T>`** (Claude가 Step 형식으로 안내 → 사용자 작성 → 리뷰)
+1. **Phase 1-3 Step 8-1 `ObjectPool<T>`** — 가이드는 2026-11-12에 전달함. 사용자가 작성 → 완료 알림 → Claude 리뷰 + Debug/Release 빌드·실행. 이어서 Step 8-2 `ObjectPool`용 `MakeShared` (힌트: `SharedPtr<Type>(pObj, Push, StlAllocator<Type>())` 3인자 생성자로 컨트롤 블록도 우리 할당기에)
 2. Phase 1-3 끝나면 README 전체 그림 갱신 + **Notion 업로드 여부를 사용자에게 묻기** (`notion-sync` 스킬)
+
+**Step 8-1 명세 (2026-11-12 가이드 요약, 다른 PC에서 이어갈 때 참고)**
+- 목표: 타입 전용 풀 `ObjectPool<Type>` — `Pop(args...)`로 꺼내고 `Push(pObj)`로 돌려준다. Debug는 `StompAllocator`, Release만 전용 풀
+- 왜: `GMemory`는 크기별 공용 풀, `ObjectPool`은 타입별 전용 사물함 (크기 딱 맞음, 타입 간 오염 격리, 타입별 `useCount`)
+- ⚠️ Windows.h 경계: `ObjectPool`은 템플릿이라 공개 헤더인데 `MemoryPool.h`는 내부 전용 → 템플릿이 아닌 `ObjectPoolBase`가 `.cpp`에서만 `MemoryPool`을 다룬다 (헤더에는 `class MemoryPool;` 전방 선언 + 포인터)
+- 파일: `ServerCore/ObjectPool.h`, `ObjectPool.cpp` (프로젝트 등록, 필터 `Memory`, CorePch에는 넣지 않음)
+- `ObjectPoolBase`: `explicit ObjectPoolBase(Int32 dataSize)` (블록 크기 = dataSize + `sizeof(MemoryHeader)`는 .cpp에서 계산, `new MemoryPool`), 소멸자 `delete`, 복사 금지, `void* Alloc()`(Pop + AttachHeader), `void Release(void* pPtr)`(DetachHeader + Push), `Int32 GetUseCount() const`, 멤버 `MemoryPool* pPool_`, `Int32 blockSize_`
+- `ObjectPool<Type>`: 정렬 `STATIC_ASSERT`, `static Type* Pop(Args&&...)`(placement new + forward), `static void Push(Type*)`(nullptr 무시 → 소멸자 → 해제), `static Int32 GetUseCount()`, `private static ObjectPoolBase& GetBase()`(함수 안 `static ObjectPoolBase SBase(sizeof(Type))`, Debug에서는 호출하지 않음)
+- 블록 주석 `[ObjectPool]`: 타입 전용 풀, Debug는 Stomp, ObjectPoolBase로 Windows.h를 감춘 이유, 객체를 모두 Push해야 함
+- 테스트: `ObjectPoolPopPush`(생성자/인자/정렬/소멸자/`Push(nullptr)`, Release만 같은 주소 재사용·useCount 1→0), `ObjectPoolConcurrent`(스레드 4 × 10,000 Pop/값 쓰기/읽기/Push, 섞임 0, Release면 useCount 0). 보조 클래스 `MemoryTestKnight`
+- 확인 질문: Q1 GMemory가 있는데 타입별 풀을 따로 두면 좋은 점 2가지 이상 / Q2 `MemoryPool`을 헤더 멤버로 두지 않고 `ObjectPoolBase`(.cpp) + 포인터로 감싼 이유
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각. **사용자가 "테스트를 작성해 달라"고 요청하면** Claude가 작성하고 Debug/Release 빌드·실행으로 확인한다 (Step 2, 3-1, 3-2는 요청으로 Claude가 작성). 지시할 때는 **테스트 함수 이름과 보조 클래스 이름을 먼저 정해서** 준다. 정상 테스트는 `main`에서 항상 켜 두고, 크래시 테스트(`Crash` 접두사)만 주석으로 둔다. 테스트는 값을 출력만 하지 않고 코드가 비교해서 `OK`/`FAIL`을 낸다.
 
