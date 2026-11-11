@@ -34,6 +34,7 @@
   - Step 섹션 구성: 🎯 목표 → 📖 개념 → 🧱 핵심 코드(사용자의 실제 코드 기준) → 🔧 강의와 다른 점 → ⚠️ 겪은 실수 → 🧩 복습 질문.
   - **Step이 끝날 때마다** Plan.md와 함께 갱신한다. 사용자가 답한 확인 질문은 답과 보충 설명을 적고, 미답변은 `(미답변)`으로 남긴다 (Claude가 답을 미리 채우지 않는다).
   - 사용자의 MEMO 주석 내용은 "📝 내 메모"로 옮겨 적을 수 있다 (코드의 MEMO는 건드리지 않는다). 강의 코드 원문은 넣지 않는다.
+- **Notion 업로드** (`notion-sync` 스킬, `.claude/skills/notion-sync/SKILL.md`): **파트(Plan.md의 Phase 단위, 예: Phase 1-3)가 끝나** Docs/Study, Docs/Diagrams, Plan.md 갱신을 마치면, 학습 내용을 Notion `[ 프로젝트 정리 ] → OogieEngine Server`에 올릴지 **사용자에게 묻는다**. 동의하면 스킬 절차대로 올리고, 사용자가 원하지 않으면 올리지 않는다. Step 하나가 끝날 때는 묻지 않는다.
 - 사용자가 남긴 **MEMO 주석은 사용자의 학습 메모**다. 형식은 `/* MEMO: ... */` 블록 주석(여러 줄)이고, `// MEMO:` 한 줄 형식도 같은 규칙으로 다룬다. Claude는 이를 수정, 삭제, 이동하지 않는다 (리뷰에서 내용이 틀렸으면 대화로만 지적한다). 코드 예시를 다시 제시할 때도 기존 MEMO는 그대로 둔다.
 
 ## 저장소 구조
@@ -43,6 +44,8 @@ Server/             OogieEngine_Server (작성 예정) — ServerCore / GameServ
 MMOServer_example/  강의 소스 (참고용, git 제외)
 Plan.md             로드맵 + 할 일 체크리스트
 Docs/Study/         학습 정리 문서 (Notion 가져오기용 Markdown, Phase별)
+Docs/Diagrams/      학습용 인터랙티브 다이어그램 (HTML, Phase별)
+.claude/skills/     프로젝트 스킬 (notion-sync: 학습 정리 → Notion 업로드)
 ```
 
 ## Client(OogieEngine) 분석 요약
