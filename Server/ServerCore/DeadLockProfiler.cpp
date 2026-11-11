@@ -7,17 +7,17 @@ void DeadLockProfiler::PushLock(const char* pName)
 {
 	LockGuard guard(lock_);
 
-	const int32 lockId = GetOrCreateLockId(pName);
+	const Int32 lockId = GetOrCreateLockId(pName);
 
 	// 이미 잡고 있는 락이 있으면 "직전 락 → 새 락" 간선을 기록한다
 	if (LLockStack.empty() == false)
 	{
-		const int32 prevId = LLockStack.top();
+		const Int32 prevId = LLockStack.top();
 
 		// 같은 락 재진입은 순서가 아니다
 		if (prevId != lockId)
 		{
-			std::set<int32>& history = lockHistory_[prevId];
+			std::set<Int32>& history = lockHistory_[prevId];
 
 			// 처음 보는 순서일 때만 사이클 검사 (insert().second == 새로 들어갔는지)
 			if (history.insert(lockId).second)
@@ -46,13 +46,13 @@ void DeadLockProfiler::PopLock(const char* pName)
 	LLockStack.pop();
 }
 
-int32 DeadLockProfiler::GetOrCreateLockId(const char* pName)
+Int32 DeadLockProfiler::GetOrCreateLockId(const char* pName)
 {
 	auto findIt = nameToId_.find(pName);
 	if (findIt != nameToId_.end())
 		return findIt->second;
 
-	const int32 lockId = static_cast<int32>(idToName_.size());
+	const Int32 lockId = static_cast<Int32>(idToName_.size());
 	nameToId_.emplace(pName, lockId);
 	idToName_.push_back(pName);
 	return lockId;
@@ -61,12 +61,12 @@ int32 DeadLockProfiler::GetOrCreateLockId(const char* pName)
 void DeadLockProfiler::CheckCycle()
 {
 	// 락 id는 0부터 빈틈없이 부여되므로 노드 수 == 이름 수
-	const int32 lockCount = static_cast<int32>(idToName_.size());
+	const Int32 lockCount = static_cast<Int32>(idToName_.size());
 	visitStates_.assign(lockCount, VisitState::NotVisited);
 
 	// 그래프가 여러 조각일 수 있으므로 모든 노드를 시작점 후보로 본다.
 	// 이미 조사한 노드는 상태를 유지한 채 건너뛴다 (전체 비용 = 노드 수 + 간선 수)
-	for (int32 lockId = 0; lockId < lockCount; ++lockId)
+	for (Int32 lockId = 0; lockId < lockCount; ++lockId)
 	{
 		if (visitStates_[lockId] == VisitState::NotVisited)
 			Dfs(lockId);
@@ -75,7 +75,7 @@ void DeadLockProfiler::CheckCycle()
 	visitStates_.clear();
 }
 
-void DeadLockProfiler::Dfs(int32 cur)
+void DeadLockProfiler::Dfs(Int32 cur)
 {
 	visitStates_[cur] = VisitState::Visiting;
 
@@ -83,7 +83,7 @@ void DeadLockProfiler::Dfs(int32 cur)
 	auto findIt = lockHistory_.find(cur);
 	if (findIt != lockHistory_.end())
 	{
-		for (const int32 nxt : findIt->second)
+		for (const Int32 nxt : findIt->second)
 		{
 			switch (visitStates_[nxt])
 			{

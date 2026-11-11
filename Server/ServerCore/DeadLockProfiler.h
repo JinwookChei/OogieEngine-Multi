@@ -21,13 +21,13 @@ public:
 	void PopLock(const char* pName);
 
 private:
-	int32 GetOrCreateLockId(const char* pName);
+	Int32 GetOrCreateLockId(const char* pName);
 	void CheckCycle();
-	void Dfs(int32 cur);
+	void Dfs(Int32 cur);
 
 private:
 	// DFS 중 노드의 상태
-	enum class VisitState : uint8
+	enum class VisitState : UInt8
 	{
 		NotVisited,	// 아직 들어가지 않음
 		Visiting,	// 들어갔지만 아직 나오지 않음 (현재 탐색 경로 위에 있음)
@@ -37,9 +37,9 @@ private:
 private:
 	Mutex lock_;
 
-	std::unordered_map<std::string, int32> nameToId_;
+	std::unordered_map<std::string, Int32> nameToId_;
 	std::vector<std::string> idToName_;
-	std::map<int32, std::set<int32>> lockHistory_;
+	std::map<Int32, std::set<Int32>> lockHistory_;
 
 	std::vector<VisitState> visitStates_;
 };

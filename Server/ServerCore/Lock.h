@@ -20,7 +20,7 @@
 
 class Lock
 {
-	enum : uint32
+	enum : UInt32
 	{
 		ACQUIRE_TIMEOUT_MS = 10'000,        // 이 시간 동안 못 잡으면 데드락으로 보고 크래시
 		MAX_SPIN_COUNT = 5'000,				// yield 하기 전 CAS 시도 횟수
@@ -40,8 +40,8 @@ private:
 	// [WWWWWWWWWWWWWWWW][RRRRRRRRRRRRRRRR]
 	// W : 쓰고 있는 Thread의 Id
 	// R : 읽고 있는 Thread의 갯수.
-	Atomic<uint32> lockFlag_{ EMPTY_FLAG };
-	uint16 writeCount_ = 0;
+	Atomic<UInt32> lockFlag_{ EMPTY_FLAG };
+	UInt16 writeCount_ = 0;
 };
 
 

@@ -13,8 +13,8 @@ void ThreadRace()
 	int threadNum = 4;
 	int repeatCnt = 1000000;
 
-	int32 v1 = 0;
-	int32 v2 = 0;
+	Int32 v1 = 0;
+	Int32 v2 = 0;
 	Mutex m;
 
 	for (int i = 0; i < threadNum; ++i)
@@ -82,53 +82,53 @@ namespace
 	class SharedNumbers
 	{
 	public:
-		void Push(int32 value)
+		void Push(Int32 value)
 		{
 			WRITE_LOCK;
 			numbers_.push_back(value);
 		}
 
 		// size와 sum을 같은 READ_LOCK 안에서 읽어야 서로 맞는 값이 된다
-		void Snapshot(OUT int64& size, OUT int64& sum)
+		void Snapshot(OUT Int64& size, OUT Int64& sum)
 		{
 			READ_LOCK;
-			size = static_cast<int64>(numbers_.size());
+			size = static_cast<Int64>(numbers_.size());
 			sum = 0;
-			for (int32 value : numbers_)
+			for (Int32 value : numbers_)
 				sum += value;
 		}
 
 	private:
 		USE_LOCK;
-		std::vector<int32> numbers_;
+		std::vector<Int32> numbers_;
 	};
 }
 
 void LockContention()
 {
-	constexpr int32 PUSH_COUNT = 10'000;
-	constexpr int32 READER_COUNT = 3;
-	constexpr int32 READ_COUNT = 1'000;
+	constexpr Int32 PUSH_COUNT = 10'000;
+	constexpr Int32 READER_COUNT = 3;
+	constexpr Int32 READ_COUNT = 1'000;
 
 	SharedNumbers shared;
-	Atomic<int32> badReadCount{ 0 };
+	Atomic<Int32> badReadCount{ 0 };
 
 	// Writer 1개
 	GThreadManager->Launch([&shared]()
 		{
-			for (int32 i = 1; i <= PUSH_COUNT; ++i)
+			for (Int32 i = 1; i <= PUSH_COUNT; ++i)
 				shared.Push(i);
 		});
 
 	// Reader 3개
-	for (int32 r = 0; r < READER_COUNT; ++r)
+	for (Int32 r = 0; r < READER_COUNT; ++r)
 	{
 		GThreadManager->Launch([&shared, &badReadCount]()
 			{
-				for (int32 i = 0; i < READ_COUNT; ++i)
+				for (Int32 i = 0; i < READ_COUNT; ++i)
 				{
-					int64 size = 0;
-					int64 sum = 0;
+					Int64 size = 0;
+					Int64 sum = 0;
 					shared.Snapshot(OUT size, OUT sum);
 
 					if (sum != size * (size + 1) / 2)
@@ -139,8 +139,8 @@ void LockContention()
 
 	GThreadManager->Join();
 
-	int64 finalSize = 0;
-	int64 finalSum = 0;
+	Int64 finalSize = 0;
+	Int64 finalSum = 0;
 	shared.Snapshot(OUT finalSize, OUT finalSum);
 
 	std::cout << "[LockContention] size : " << finalSize << " (expected " << PUSH_COUNT << ")" << std::endl;
@@ -272,7 +272,7 @@ void CrashDeadLockCycle()
 class MemoryTestKnight
 {
 public:
-	MemoryTestKnight(int32 hp, int32 attack) : hp_(hp), attack_(attack) 
+	MemoryTestKnight(Int32 hp, Int32 attack) : hp_(hp), attack_(attack) 
 	{
 		++SConstructCount;
 	}
@@ -281,11 +281,11 @@ public:
 		++SDestructCount;
 	}
 
-	inline static int32 SConstructCount = 0;
-	inline static int32 SDestructCount = 0;
+	inline static Int32 SConstructCount = 0;
+	inline static Int32 SDestructCount = 0;
 
-	int32 hp_;
-	int32 attack_;
+	Int32 hp_;
+	Int32 attack_;
 };
 
 void XnewXdelete()
@@ -332,17 +332,17 @@ void XnewXdelete()
 void StompAllocFree()
 {
 	// StompAllocator의 PAGE_SIZE, ALIGNMENT는 private이라 테스트에서 같은 값을 따로 둔다
-	constexpr uintptr PAGE = 4096;
-	constexpr uintptr ALIGN = 16;
+	constexpr UIntPtr PAGE = 4096;
+	constexpr UIntPtr ALIGN = 16;
 
 	// 8: 1페이지 안의 작은 객체 / 4096: 딱 1페이지 (앞쪽 빈 공간 0) / 5000: 2페이지에 걸침
-	const int32 sizes[] = { 8, 4096, 5000 };
+	const Int32 sizes[] = { 8, 4096, 5000 };
 
-	for (int32 size : sizes)
+	for (Int32 size : sizes)
 	{
 		void* pPtr = StompAllocator::Alloc(size);
-		const uintptr address = reinterpret_cast<uintptr>(pPtr);
-		const uintptr alignedSize = (static_cast<uintptr>(size) + ALIGN - 1) / ALIGN * ALIGN;
+		const UIntPtr address = reinterpret_cast<UIntPtr>(pPtr);
+		const UIntPtr alignedSize = (static_cast<UIntPtr>(size) + ALIGN - 1) / ALIGN * ALIGN;
 
 		// 1) 정렬: 반환 주소가 16의 배수
 		const bool aligned = (address % ALIGN == 0);
@@ -351,14 +351,14 @@ void StompAllocFree()
 		const bool atPageEnd = ((address + alignedSize) % PAGE == 0);
 
 		// 3) 받은 메모리 전체를 쓰고 다시 읽는다 (커밋이 안 된 바이트가 있으면 여기서 크래시)
-		int8* pBytes = static_cast<int8*>(pPtr);
-		for (int32 i = 0; i < size; ++i)
-			pBytes[i] = static_cast<int8>(i);
+		Int8* pBytes = static_cast<Int8*>(pPtr);
+		for (Int32 i = 0; i < size; ++i)
+			pBytes[i] = static_cast<Int8>(i);
 
 		bool dataOk = true;
-		for (int32 i = 0; i < size; ++i)
+		for (Int32 i = 0; i < size; ++i)
 		{
-			if (pBytes[i] != static_cast<int8>(i))
+			if (pBytes[i] != static_cast<Int8>(i))
 				dataOk = false;
 		}
 
@@ -397,10 +397,10 @@ void CrashStompUseAfterFree()
 void CrashStompOverflow()
 {
 	// 데이터 끝이 정확히 페이지 끝에 오는 크기를 쓴다
-	constexpr int32 SIZE = 16;
+	constexpr Int32 SIZE = 16;
 
 	// xnew를 거치지 않고 StompAllocator를 직접 쓰므로 Release 빌드에서도 크래시가 나야 한다
-	int8* pBytes = static_cast<int8*>(StompAllocator::Alloc(SIZE));
+	Int8* pBytes = static_cast<Int8*>(StompAllocator::Alloc(SIZE));
 
 	pBytes[SIZE - 1] = 1;   // 마지막 바이트: 정상
 	pBytes[SIZE] = 1;       // 한 바이트 넘어감 → 할당되지 않은 주소 → 이 줄에서 Access Violation
@@ -415,25 +415,25 @@ void CrashStompOverflow()
 */
 void MemoryHeaderAttachDetach()
 {
-	constexpr int32 DATA_SIZE = 64;
-	const int32 headerSize = static_cast<int32>(sizeof(MemoryHeader));
+	constexpr Int32 DATA_SIZE = 64;
+	const Int32 headerSize = static_cast<Int32>(sizeof(MemoryHeader));
 
 	// 블록 = [MemoryHeader][Data 64B]. malloc은 16바이트 정렬을 주므로 SLIST 조건을 만족한다
 	void* pMemory = BaseAllocator::Alloc(headerSize + DATA_SIZE);
 	MemoryHeader* pBlock = static_cast<MemoryHeader*>(pMemory);
 	void* pData = MemoryHeader::AttachHeader(pBlock, DATA_SIZE);
 
-	// 1) 데이터 주소 = 블록 시작 + 헤더 크기 (바이트 차이는 int8*로 빼서 구한다)
-	const int32 offset = static_cast<int32>(static_cast<int8*>(pData) - static_cast<int8*>(pMemory));
+	// 1) 데이터 주소 = 블록 시작 + 헤더 크기 (바이트 차이는 Int8*로 빼서 구한다)
+	const Int32 offset = static_cast<Int32>(static_cast<Int8*>(pData) - static_cast<Int8*>(pMemory));
 	const bool offsetOk = (offset == headerSize);
 
 	// 2) 데이터 주소도 16바이트 정렬
-	const bool aligned = (reinterpret_cast<uintptr>(pData) % SLIST_ALIGNMENT == 0);
+	const bool aligned = (reinterpret_cast<UIntPtr>(pData) % SLIST_ALIGNMENT == 0);
 
 	// 3) 데이터 영역 전체에 써도 헤더가 그대로인지 (데이터가 헤더를 덮지 않는다)
-	int8* pBytes = static_cast<int8*>(pData);
-	for (int32 i = 0; i < DATA_SIZE; ++i)
-		pBytes[i] = static_cast<int8>(0x7F);
+	Int8* pBytes = static_cast<Int8*>(pData);
+	for (Int32 i = 0; i < DATA_SIZE; ++i)
+		pBytes[i] = static_cast<Int8>(0x7F);
 	const bool headerIntact = (pBlock->allocSize_ == DATA_SIZE);
 
 	// 4) 데이터 주소에서 되찾은 헤더 = 블록 시작
@@ -457,15 +457,15 @@ void MemoryHeaderAttachDetach()
 */
 void MemoryPoolReuse()
 {
-	constexpr int32 DATA_SIZE = 64;
-	const int32 blockSize = static_cast<int32>(sizeof(MemoryHeader)) + DATA_SIZE;
+	constexpr Int32 DATA_SIZE = 64;
+	const Int32 blockSize = static_cast<Int32>(sizeof(MemoryHeader)) + DATA_SIZE;
 
 	MemoryPool pool(blockSize);
 
 	// 1) 처음 Pop: 풀이 비어 있으므로 새로 할당된다
 	MemoryHeader* pFirst = pool.Pop();
 	void* pData = MemoryHeader::AttachHeader(pFirst, blockSize);
-	const bool aligned = (reinterpret_cast<uintptr>(pFirst) % SLIST_ALIGNMENT == 0);
+	const bool aligned = (reinterpret_cast<UIntPtr>(pFirst) % SLIST_ALIGNMENT == 0);
 	const bool countAfterPop = (pool.GetUseCount() == 1 && pool.GetReserveCount() == 0);
 
 	// 2) Push: 해제하지 않고 풀에 보관된다
@@ -493,29 +493,29 @@ void MemoryPoolReuse()
 
 void MemoryPoolConcurrent()
 {
-	constexpr int32 THREAD_COUNT = 4;
-	constexpr int32 REPEAT_COUNT = 10'000;
-	constexpr int32 DATA_SIZE = 64;
-	const int32 blockSize = static_cast<int32>(sizeof(MemoryHeader)) + DATA_SIZE;
+	constexpr Int32 THREAD_COUNT = 4;
+	constexpr Int32 REPEAT_COUNT = 10'000;
+	constexpr Int32 DATA_SIZE = 64;
+	const Int32 blockSize = static_cast<Int32>(sizeof(MemoryHeader)) + DATA_SIZE;
 
 	MemoryPool pool(blockSize);
-	Atomic<int32> badDataCount{ 0 };
+	Atomic<Int32> badDataCount{ 0 };
 
-	for (int32 t = 0; t < THREAD_COUNT; ++t)
+	for (Int32 t = 0; t < THREAD_COUNT; ++t)
 	{
 		GThreadManager->Launch([&pool, &badDataCount, t]()
 			{
 				// 스레드마다 다른 값으로 채운다. 두 스레드가 같은 블록을 동시에 받으면 값이 섞인다
-				const int8 mark = static_cast<int8>(t + 1);
+				const Int8 mark = static_cast<Int8>(t + 1);
 
-				for (int32 i = 0; i < REPEAT_COUNT; ++i)
+				for (Int32 i = 0; i < REPEAT_COUNT; ++i)
 				{
 					MemoryHeader* pBlock = pool.Pop();
-					int8* pBytes = static_cast<int8*>(MemoryHeader::AttachHeader(pBlock, blockSize));
+					Int8* pBytes = static_cast<Int8*>(MemoryHeader::AttachHeader(pBlock, blockSize));
 
-					for (int32 j = 0; j < DATA_SIZE; ++j)
+					for (Int32 j = 0; j < DATA_SIZE; ++j)
 						pBytes[j] = mark;
-					for (int32 j = 0; j < DATA_SIZE; ++j)
+					for (Int32 j = 0; j < DATA_SIZE; ++j)
 					{
 						if (pBytes[j] != mark)
 						{
@@ -531,8 +531,8 @@ void MemoryPoolConcurrent()
 	GThreadManager->Join();
 
 	// 동시에 밖에 나가 있을 수 있는 블록은 스레드 수만큼이다 → 만들어진 블록 수(= 끝난 뒤 reserve)도 1 ~ THREAD_COUNT
-	const int32 useCount = pool.GetUseCount();
-	const int32 reserveCount = pool.GetReserveCount();
+	const Int32 useCount = pool.GetUseCount();
+	const Int32 reserveCount = pool.GetReserveCount();
 
 	if (useCount != 0 || reserveCount < 1 || reserveCount > THREAD_COUNT || badDataCount.load() != 0)
 	{
@@ -546,7 +546,7 @@ void MemoryPoolConcurrent()
 
 void CrashMemoryPoolDoublePush()
 {
-	const int32 blockSize = static_cast<int32>(sizeof(MemoryHeader)) + 64;
+	const Int32 blockSize = static_cast<Int32>(sizeof(MemoryHeader)) + 64;
 	MemoryPool pool(blockSize);
 
 	MemoryHeader* pBlock = pool.Pop();
@@ -564,12 +564,12 @@ void CrashMemoryPoolDoublePush()
 */
 void MemoryAllocReuse()
 {
-	constexpr int32 DATA_SIZE = 100;
+	constexpr Int32 DATA_SIZE = 100;
 
 	// 1) 할당: 데이터 주소는 16바이트 정렬이고, 헤더에는 헤더 포함 블록 크기가 적혀 있어야 한다
 	void* pFirst = GMemory->Allocate(DATA_SIZE);
-	const bool aligned = (reinterpret_cast<uintptr>(pFirst) % SLIST_ALIGNMENT == 0);
-	const int32 expectedBlockSize = DATA_SIZE + static_cast<int32>(sizeof(MemoryHeader));
+	const bool aligned = (reinterpret_cast<UIntPtr>(pFirst) % SLIST_ALIGNMENT == 0);
+	const Int32 expectedBlockSize = DATA_SIZE + static_cast<Int32>(sizeof(MemoryHeader));
 	const bool headerOk = (MemoryHeader::DetachHeader(pFirst)->allocSize_ == expectedBlockSize);
 
 	// 2) 해제 후 같은 크기를 다시 할당: 풀이 방금 받은 블록을 그대로 다시 줘야 한다 (LIFO 재사용)
@@ -590,10 +590,10 @@ void MemoryAllocReuse()
 
 void MemoryBoundarySizes()
 {
-	const int32 headerSize = static_cast<int32>(sizeof(MemoryHeader));
+	const Int32 headerSize = static_cast<Int32>(sizeof(MemoryHeader));
 
 	// 가장 작은 크기, 풀 간격이 바뀌는 지점, 블록 크기가 MAX_ALLOC_SIZE인 지점과 그 바로 위, 충분히 큰 크기
-	const int32 sizes[] = {
+	const Int32 sizes[] = {
 		1,
 		1024,
 		Memory::MAX_ALLOC_SIZE - headerSize,
@@ -602,20 +602,20 @@ void MemoryBoundarySizes()
 		5000
 	};
 
-	for (int32 size : sizes)
+	for (Int32 size : sizes)
 	{
 		void* pPtr = GMemory->Allocate(size);
-		const bool aligned = (reinterpret_cast<uintptr>(pPtr) % SLIST_ALIGNMENT == 0);
+		const bool aligned = (reinterpret_cast<UIntPtr>(pPtr) % SLIST_ALIGNMENT == 0);
 
 		// 받은 메모리 전체를 쓰고 다시 읽는다
-		int8* pBytes = static_cast<int8*>(pPtr);
-		for (int32 i = 0; i < size; ++i)
-			pBytes[i] = static_cast<int8>(i);
+		Int8* pBytes = static_cast<Int8*>(pPtr);
+		for (Int32 i = 0; i < size; ++i)
+			pBytes[i] = static_cast<Int8>(i);
 
 		bool dataOk = true;
-		for (int32 i = 0; i < size; ++i)
+		for (Int32 i = 0; i < size; ++i)
 		{
-			if (pBytes[i] != static_cast<int8>(i))
+			if (pBytes[i] != static_cast<Int8>(i))
 				dataOk = false;
 		}
 
@@ -637,35 +637,35 @@ void MemoryBoundarySizes()
 
 void MemoryConcurrent()
 {
-	constexpr int32 THREAD_COUNT = 4;
-	constexpr int32 REPEAT_COUNT = 2'000;
+	constexpr Int32 THREAD_COUNT = 4;
+	constexpr Int32 REPEAT_COUNT = 2'000;
 
-	Atomic<int32> badDataCount{ 0 };
+	Atomic<Int32> badDataCount{ 0 };
 
-	for (int32 t = 0; t < THREAD_COUNT; ++t)
+	for (Int32 t = 0; t < THREAD_COUNT; ++t)
 	{
 		GThreadManager->Launch([&badDataCount, t]()
 			{
-				constexpr int32 SIZE_COUNT = 5;
-				constexpr int32 SIZES[SIZE_COUNT] = { 16, 100, 1000, 3000, 5000 };
+				constexpr Int32 SIZE_COUNT = 5;
+				constexpr Int32 SIZES[SIZE_COUNT] = { 16, 100, 1000, 3000, 5000 };
 
-				for (int32 i = 0; i < REPEAT_COUNT; ++i)
+				for (Int32 i = 0; i < REPEAT_COUNT; ++i)
 				{
-					int8* blocks[SIZE_COUNT] = { nullptr };
+					Int8* blocks[SIZE_COUNT] = { nullptr };
 
 					// 스레드와 크기마다 다른 값으로 채운다. 블록을 함께 들고 있으므로 블록끼리 겹치거나 다른 스레드와 공유되면 값이 섞인다
-					for (int32 s = 0; s < SIZE_COUNT; ++s)
+					for (Int32 s = 0; s < SIZE_COUNT; ++s)
 					{
-						blocks[s] = static_cast<int8*>(GMemory->Allocate(SIZES[s]));
-						const int8 mark = static_cast<int8>(t * 10 + s + 1);
-						for (int32 j = 0; j < SIZES[s]; ++j)
+						blocks[s] = static_cast<Int8*>(GMemory->Allocate(SIZES[s]));
+						const Int8 mark = static_cast<Int8>(t * 10 + s + 1);
+						for (Int32 j = 0; j < SIZES[s]; ++j)
 							blocks[s][j] = mark;
 					}
 
-					for (int32 s = 0; s < SIZE_COUNT; ++s)
+					for (Int32 s = 0; s < SIZE_COUNT; ++s)
 					{
-						const int8 mark = static_cast<int8>(t * 10 + s + 1);
-						for (int32 j = 0; j < SIZES[s]; ++j)
+						const Int8 mark = static_cast<Int8>(t * 10 + s + 1);
+						for (Int32 j = 0; j < SIZES[s]; ++j)
 						{
 							if (blocks[s][j] != mark)
 							{
@@ -694,21 +694,21 @@ void MemoryConcurrent()
 */
 void PoolAllocatorAllocFree()
 {
-	constexpr int32 DATA_SIZE = 100;
+	constexpr Int32 DATA_SIZE = 100;
 
 	// 1) 할당: 16바이트 정렬
 	void* pFirst = PoolAllocator::Alloc(DATA_SIZE);
-	const bool aligned = (reinterpret_cast<uintptr>(pFirst) % SLIST_ALIGNMENT == 0);
+	const bool aligned = (reinterpret_cast<UIntPtr>(pFirst) % SLIST_ALIGNMENT == 0);
 
 	// 2) 받은 메모리 전체를 쓰고 다시 읽는다
-	int8* pBytes = static_cast<int8*>(pFirst);
-	for (int32 i = 0; i < DATA_SIZE; ++i)
-		pBytes[i] = static_cast<int8>(i);
+	Int8* pBytes = static_cast<Int8*>(pFirst);
+	for (Int32 i = 0; i < DATA_SIZE; ++i)
+		pBytes[i] = static_cast<Int8>(i);
 
 	bool dataOk = true;
-	for (int32 i = 0; i < DATA_SIZE; ++i)
+	for (Int32 i = 0; i < DATA_SIZE; ++i)
 	{
-		if (pBytes[i] != static_cast<int8>(i))
+		if (pBytes[i] != static_cast<Int8>(i))
 			dataOk = false;
 	}
 

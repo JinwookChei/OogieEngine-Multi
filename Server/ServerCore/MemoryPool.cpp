@@ -2,10 +2,10 @@
 #include "MemoryPool.h"
 #include <malloc.h>      // _aligned_malloc, _aligned_free
 
-MemoryPool::MemoryPool(int32 allocSize) : allocSize_(allocSize)
+MemoryPool::MemoryPool(Int32 allocSize) : allocSize_(allocSize)
 {
 	// 블록 안에 최소한 헤더는 들어가야 한다
-	ASSERT_CRASH(allocSize >= static_cast<int32>(sizeof(MemoryHeader)));
+	ASSERT_CRASH(allocSize >= static_cast<Int32>(sizeof(MemoryHeader)));
 	::InitializeSListHead(&header_);
 }
 

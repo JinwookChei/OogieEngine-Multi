@@ -10,7 +10,7 @@
 */
 
 // SLIST 노드는 16바이트 경계에 있어야 한다 (SLIST_HEADER가 블록 주소의 끝 4비트를 저장하지 않는다)
-constexpr int32 SLIST_ALIGNMENT = MEMORY_ALLOCATION_ALIGNMENT;
+constexpr Int32 SLIST_ALIGNMENT = MEMORY_ALLOCATION_ALIGNMENT;
 
 /*
 				[MemoryHeader]
@@ -22,10 +22,10 @@ constexpr int32 SLIST_ALIGNMENT = MEMORY_ALLOCATION_ALIGNMENT;
 */
 struct alignas(SLIST_ALIGNMENT) MemoryHeader : public SLIST_ENTRY
 {
-	explicit MemoryHeader(int32 size) : allocSize_(size) {}
+	explicit MemoryHeader(Int32 size) : allocSize_(size) {}
 
 	// 블록 시작 주소에 헤더를 만들고, 헤더 바로 뒤(데이터 시작) 주소를 돌려준다
-	static void* AttachHeader(MemoryHeader* pHeader, int32 size)
+	static void* AttachHeader(MemoryHeader* pHeader, Int32 size)
 	{
 		new(pHeader) MemoryHeader(size);   // 메모리는 이미 있으므로 생성자만 호출 (placement new)
 		return pHeader + 1;                // MemoryHeader 1개(= sizeof(MemoryHeader) 바이트) 뒤
@@ -37,7 +37,7 @@ struct alignas(SLIST_ALIGNMENT) MemoryHeader : public SLIST_ENTRY
 		return static_cast<MemoryHeader*>(pPtr) - 1;
 	}
 
-	int32 allocSize_ = 0;
+	Int32 allocSize_ = 0;
 };
 
 // 데이터 시작 주소(pHeader + 1)도 16바이트 정렬이 되려면 헤더 크기가 16의 배수여야 한다
@@ -55,7 +55,7 @@ class alignas(SLIST_ALIGNMENT) MemoryPool
 {
 public:
 	// allocSize: 블록 하나의 전체 크기 (MemoryHeader 포함)
-	explicit MemoryPool(int32 allocSize);
+	explicit MemoryPool(Int32 allocSize);
 	~MemoryPool();
 
 	// 사용하는 쪽에서 AttachHeader로 헤더를 붙인 블록만 받는다
@@ -64,13 +64,13 @@ public:
 	// 헤더가 아직 붙지 않은 블록을 돌려준다 (사용하는 쪽에서 AttachHeader)
 	MemoryHeader* Pop();
 
-	int32 GetAllocSize() const { return allocSize_; }
-	int32 GetUseCount() const { return useCount_.load(); }
-	int32 GetReserveCount() const { return reserveCount_.load(); }
+	Int32 GetAllocSize() const { return allocSize_; }
+	Int32 GetUseCount() const { return useCount_.load(); }
+	Int32 GetReserveCount() const { return reserveCount_.load(); }
 
 private:
 	SLIST_HEADER header_;              // 빈 블록 리스트의 머리 (top 주소 + 순번, 16바이트)
-	int32 allocSize_ = 0;
-	Atomic<int32> useCount_ = 0;       // 밖에서 사용 중인 블록 수
-	Atomic<int32> reserveCount_ = 0;   // 풀 안에서 쉬는 블록 수
+	Int32 allocSize_ = 0;
+	Atomic<Int32> useCount_ = 0;       // 밖에서 사용 중인 블록 수
+	Atomic<Int32> reserveCount_ = 0;   // 풀 안에서 쉬는 블록 수
 };

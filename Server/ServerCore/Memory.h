@@ -24,7 +24,7 @@ class MemoryPool;
 class Memory
 {
 public:
-	static constexpr int32 MAX_ALLOC_SIZE = 4096;
+	static constexpr Int32 MAX_ALLOC_SIZE = 4096;
 
 public:
 	Memory();
@@ -33,11 +33,11 @@ public:
 	Memory(const Memory&) = delete;
 	Memory& operator=(const Memory&) = delete;
 
-	void* Allocate(int32 size);
+	void* Allocate(Int32 size);
 	void Release(void* pPtr);
 
 private:
-	void AddPool(int32 blockSize);
+	void AddPool(Int32 blockSize);
 	
 	std::vector<MemoryPool*> pools_;
 	MemoryPool* poolTable_[MAX_ALLOC_SIZE + 1] = {nullptr};
@@ -55,7 +55,7 @@ Type* xnew(Args&&... args)
 	STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
 
 	// ① 메모리만 확보
-	Type* pMemory = static_cast<Type*>(DefaultAllocator::Alloc(static_cast<int32>(sizeof(Type))));
+	Type* pMemory = static_cast<Type*>(DefaultAllocator::Alloc(static_cast<Int32>(sizeof(Type))));
 
 	// ② 확보한 주소 위에서 생성자만 호출 (placement new). 인자는 받은 그대로 전달한다
 	new(pMemory) Type(std::forward<Args>(args)...);

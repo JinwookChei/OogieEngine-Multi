@@ -6,13 +6,13 @@
 Memory::Memory()
 {
 	pools_.reserve(48);
-	for (int32 blockSize = 32; blockSize <= 1024; blockSize+=32)
+	for (Int32 blockSize = 32; blockSize <= 1024; blockSize+=32)
 		AddPool(blockSize);
 
-	for (int32 blockSize = 1152; blockSize <= 2048; blockSize += 128)
+	for (Int32 blockSize = 1152; blockSize <= 2048; blockSize += 128)
 		AddPool(blockSize);
 
-	for (int32 blockSize = 2304; blockSize <= 4096; blockSize += 256)
+	for (Int32 blockSize = 2304; blockSize <= 4096; blockSize += 256)
 		AddPool(blockSize);
 
 	// 마지막 풀이 MAX_ALLOC_SIZE여야 poolTable_의 끝까지 빈칸 없이 채워진다
@@ -25,14 +25,14 @@ Memory::~Memory()
 		delete pPool;
 }
 
-void* Memory::Allocate(int32 size)
+void* Memory::Allocate(Int32 size)
 {
 	ASSERT_CRASH(size > 0);
-	const int32 headerSize = static_cast<int32>(sizeof(MemoryHeader));
+	const Int32 headerSize = static_cast<Int32>(sizeof(MemoryHeader));
 	ASSERT_CRASH(size <= INT32_MAX - headerSize);
 
 	MemoryHeader* pHeader = nullptr;
-	int32 blockSize = size + headerSize;
+	Int32 blockSize = size + headerSize;
 
 	// 풀 크기를 넘는 블록은 직접 할당한다.
 	if (blockSize > MAX_ALLOC_SIZE)
@@ -54,7 +54,7 @@ void Memory::Release(void* pPtr)
 	ASSERT_CRASH(pPtr != nullptr);
 
 	MemoryHeader* pHeader = MemoryHeader::DetachHeader(pPtr);
-	int32 blockSize = pHeader->allocSize_;
+	Int32 blockSize = pHeader->allocSize_;
 	ASSERT_CRASH(blockSize > 0);
 
 	// Allocate와 같은 기준으로 경로를 고른다. 할당한 곳으로 돌려줘야 한다
@@ -69,15 +69,15 @@ void Memory::Release(void* pPtr)
 	}
 }
 
-void Memory::AddPool(int32 blockSize)
+void Memory::AddPool(Int32 blockSize)
 {
-	int32 startIndex = 1;
+	Int32 startIndex = 1;
 	if (!pools_.empty())
 		startIndex = pools_.back()->GetAllocSize()+1;
 
 	MemoryPool* pPool = new MemoryPool(blockSize);
 	pools_.push_back(pPool);
 
-	for (int32 index = startIndex; index <= blockSize; ++index)
+	for (Int32 index = startIndex; index <= blockSize; ++index)
 		poolTable_[index] = pPool;
 }

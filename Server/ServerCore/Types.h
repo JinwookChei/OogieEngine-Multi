@@ -12,20 +12,23 @@
 	[정수 타입]
 */
 using BYTE = unsigned char;
-using int8 = std::int8_t;
-using int16 = std::int16_t;
-using int32 = std::int32_t;
-using int64 = std::int64_t;
-using uint8 = std::uint8_t;
-using uint16 = std::uint16_t;
-using uint32 = std::uint32_t;
-using uint64 = std::uint64_t;
+using Int8 = std::int8_t;
+using Int16 = std::int16_t;
+using Int32 = std::int32_t;
+using Int64 = std::int64_t;
+using UInt8 = std::uint8_t;
+using UInt16 = std::uint16_t;
+using UInt32 = std::uint32_t;
+using UInt64 = std::uint64_t;
 // 타입 크기 검증은 Types.cpp에서 한다.
 
 /*
 	[포인터 타입]
 */
-using uintptr = std::uintptr_t;
+template<typename T>
+using SharedPtr = std::shared_ptr<T>;
+using UIntPtr = std::uintptr_t;
+
 
 /*
 	[동기화 타입]

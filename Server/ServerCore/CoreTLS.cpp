@@ -1,5 +1,5 @@
 ﻿#include "pch.h"
 #include "CoreTLS.h"
 
-thread_local uint32 LThreadId = 0;
-thread_local std::stack<int32> LLockStack;
+thread_local UInt32 LThreadId = 0;
+thread_local std::stack<Int32> LLockStack;

@@ -8,11 +8,11 @@
 // [1층] 구현: static_assert를 직접 쓰는 유일한 곳. 검증 방식을 바꾸려면 이 줄만 수정한다.
 //       msg에는 문자열 리터럴만 넘긴다. (예: "[ServerCore] " msg 처럼 접두어를 붙일 수 있도록)
 //       expr에 템플릿 식처럼 쉼표가 들어가면 괄호로 한 번 더 감싼다.
-//       예) STATIC_ASSERT((std::is_same_v<int32, int>), "int32 must be int");
+//       예) STATIC_ASSERT((std::is_same_v<Int32, int>), "Int32 must be int");
 #define STATIC_ASSERT(expr, msg)        static_assert((expr), msg)
 
 // [2층] 용도별 매크로: 반드시 STATIC_ASSERT를 거친다.
-//       예) STATIC_ASSERT_SIZE(int32, 4) → 실패 시 "int32 must be 4 bytes"
+//       예) STATIC_ASSERT_SIZE(Int32, 4) → 실패 시 "Int32 must be 4 bytes"
 #define STATIC_ASSERT_SIZE(type, size) \
 	STATIC_ASSERT(sizeof(type) == (size), #type " must be " #size " bytes")
 
@@ -29,7 +29,7 @@
 	do {													\
 		const char* volatile pCrashCause = (cause);			\
 		(void)pCrashCause;									\
-		volatile uint32* pCrash = nullptr;					\
+		volatile UInt32* pCrash = nullptr;					\
 		__analysis_assume(pCrash != nullptr);				\
 		*pCrash = 0xDEADBEEF;								\
 	} while (0)
@@ -55,11 +55,11 @@
 /*
 	[크기 매크로]
 */
-// sizeof는 size_t(x64에서 8바이트)를 반환 → 패킷 크기 필드(uint16)에 넣을 때 캐스팅 필요
-#define size16(val)             static_cast<int16>(sizeof(val))
-#define size32(val)             static_cast<int32>(sizeof(val))
-#define len16(arr)              static_cast<int16>(sizeof(arr) / sizeof(arr[0]))
-#define len32(arr)              static_cast<int32>(sizeof(arr) / sizeof(arr[0]))
+// sizeof는 size_t(x64에서 8바이트)를 반환 → 패킷 크기 필드(UInt16)에 넣을 때 캐스팅 필요
+#define size16(val)             static_cast<Int16>(sizeof(val))
+#define size32(val)             static_cast<Int32>(sizeof(val))
+#define len16(arr)              static_cast<Int16>(sizeof(arr) / sizeof(arr[0]))
+#define len32(arr)              static_cast<Int32>(sizeof(arr) / sizeof(arr[0]))
 
 
 /*

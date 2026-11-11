@@ -17,7 +17,7 @@ void Lock::WriteLock(const char* pName)
 	ASSERT_CRASH(LThreadId != 0 && LThreadId <= 0xFFFF);
 
 	// 1) 재진입: 이미 내가 Write 락을 갖고 있으면 횟수만 늘린다
-	const uint32 lockThreadId = (lockFlag_.load() & WRITE_THREAD_MASK) >> 16;
+	const UInt32 lockThreadId = (lockFlag_.load() & WRITE_THREAD_MASK) >> 16;
 	if (lockThreadId == LThreadId)
 	{
 		++writeCount_;
@@ -25,15 +25,15 @@ void Lock::WriteLock(const char* pName)
 	}
 
 	// 2) 아무도 Read/Write 하지 않는 상태(EMPTY)일 때만 내 ID를 써넣는다
-	const uint32 desired = (LThreadId << 16) & WRITE_THREAD_MASK;
+	const UInt32 desired = (LThreadId << 16) & WRITE_THREAD_MASK;
 	const auto beginTime = std::chrono::steady_clock::now();
 
 	while (true)
 	{
-		for (uint32 spinCount = 0; spinCount < MAX_SPIN_COUNT; ++spinCount)
+		for (UInt32 spinCount = 0; spinCount < MAX_SPIN_COUNT; ++spinCount)
 		{
 			// 실패하면 CAS가 expected에 현재 값을 써넣으므로, 매번 다시 EMPTY로 초기화한다
-			uint32 expected = EMPTY_FLAG;
+			UInt32 expected = EMPTY_FLAG;
 			if (lockFlag_.compare_exchange_strong(OUT expected, desired))
 			{
 				++writeCount_;
@@ -57,7 +57,7 @@ void Lock::WriteUnlock(const char* pName)
 #endif // DEBUG
 
 	// 내가 잡은 락만 풀 수 있다
-	const uint32 lockThreadId = (lockFlag_.load() & WRITE_THREAD_MASK) >> 16;
+	const UInt32 lockThreadId = (lockFlag_.load() & WRITE_THREAD_MASK) >> 16;
 	ASSERT_CRASH(lockThreadId == LThreadId);
 
 	// Write 중에 잡은 Read 락이 남아 있으면 순서 위반 (Read를 먼저 풀어야 한다)
@@ -120,7 +120,7 @@ void Lock::ReadLock(const char* pName)
 	ASSERT_CRASH(LThreadId != 0 && LThreadId <= 0xFFFF);
 
 	// 1) 내가 Write 락을 갖고 있으면 다른 스레드는 들어올 수 없다 → 경쟁 없이 Read 카운트만 올린다
-	const uint32 lockThreadId = (lockFlag_.load() & WRITE_THREAD_MASK) >> 16;
+	const UInt32 lockThreadId = (lockFlag_.load() & WRITE_THREAD_MASK) >> 16;
 	if (lockThreadId == LThreadId)
 	{
 		lockFlag_.fetch_add(1);
@@ -132,9 +132,9 @@ void Lock::ReadLock(const char* pName)
 
 	while (true)
 	{
-		for (uint32 spinCount = 0; spinCount < MAX_SPIN_COUNT; ++spinCount)
+		for (UInt32 spinCount = 0; spinCount < MAX_SPIN_COUNT; ++spinCount)
 		{
-			uint32 expected = (lockFlag_.load() & READ_COUNT_MASK);
+			UInt32 expected = (lockFlag_.load() & READ_COUNT_MASK);
 			if (lockFlag_.compare_exchange_strong(OUT expected, expected + 1))
 				return;
 		}
