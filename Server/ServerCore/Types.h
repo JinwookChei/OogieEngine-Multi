@@ -1,5 +1,6 @@
 ﻿#pragma once
 #include <cstdint>
+#include <cstddef>
 #include <memory>
 #include <atomic>
 #include <mutex>
@@ -20,6 +21,7 @@ using UInt8 = std::uint8_t;
 using UInt16 = std::uint16_t;
 using UInt32 = std::uint32_t;
 using UInt64 = std::uint64_t;
+using USize = std::size_t;
 // 타입 크기 검증은 Types.cpp에서 한다.
 
 /*

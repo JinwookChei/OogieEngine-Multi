@@ -92,3 +92,59 @@ SharedPtr<Type> MakeShared(Args&&... args)
 
 	return SharedPtr<Type>(pObj, xdelete<Type>);
 }
+
+/*
+		[StlAllocator]
+		STL 컨테이너(vector, map ...)가 내부 메모리를 DefaultAllocator에서 받게 하는 어댑터.
+		  예) std::vector<Int32, StlAllocator<Int32>>
+		- allocate(count)는 "Type count개"를 담을 메모리만 준다. 생성자/소멸자는 컨테이너가 부른다.
+		- 컨테이너는 받은 할당기로 다른 타입용 할당기(map의 트리 노드 등)를 만들어 쓴다 → 변환 생성자 (rebind)
+		- 멤버 변수가 없으므로 모든 StlAllocator는 서로 같다 → 어느 것으로 받아도 어느 것으로든 해제할 수 있다.
+		- xnew와 같이 CoreGlobal이 살아 있는 동안에만 쓴다 (Release는 GMemory를 쓴다).
+*/
+template<typename Type>
+class StlAllocator
+{
+	// 할당기들은 16바이트 정렬까지만 보장한다 (xnew와 같은 검사)
+	STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
+
+public:
+	using value_type = Type;
+
+	StlAllocator() = default;
+
+	// 다른 타입용 StlAllocator에서 만든다. 옮길 상태가 없으므로 아무 일도 하지 않는다
+	template<typename Other>
+	StlAllocator(const StlAllocator<Other>& /* other */) {}
+
+	Type* allocate(USize count)
+	{
+		// 아래 곱셈 결과가 Int32를 넘지 않도록 곱하기 전에 나눗셈으로 확인한다
+		ASSERT_CRASH(count <= INT32_MAX / sizeof(Type));
+
+		const Int32 size = static_cast<Int32>(count * sizeof(Type));
+		Type* pMemory = static_cast<Type*>(DefaultAllocator::Alloc(size));
+
+		ASSERT_CRASH(pMemory != nullptr);
+		return pMemory;
+	}
+
+	// 크기는 할당기가 이미 안다 (MemoryHeader / Stomp 페이지) → count는 쓰지 않는다
+	void deallocate(Type* pPtr, USize /* count */)
+	{
+		DefaultAllocator::Release(pPtr);
+	}
+};
+
+// 상태가 없는 할당기라 타입이 달라도 항상 같다
+template<typename T, typename U>
+bool operator==(const StlAllocator<T>&, const StlAllocator<U>&)
+{
+	return true;
+}
+
+template<typename T, typename U>
+bool operator!=(const StlAllocator<T>&, const StlAllocator<U>&)
+{
+	return false;
+}

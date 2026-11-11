@@ -1,6 +1,7 @@
 ﻿#include "pch.h"
 #include <thread>
 #include <vector>
+#include <map>
 #include "ThreadManager.h"
 #include "Lock.h"
 #include "Memory.h"
@@ -813,6 +814,81 @@ void MakeSharedPoolReuse()
 
 	std::cout << "[MakeSharedPoolReuse] OK" << std::endl;
 #endif
+}
+
+/*
+	[Memory 테스트] StlAllocator
+*/
+void StlAllocatorAllocFree()
+{
+	constexpr Int32 COUNT = 10;
+
+	StlAllocator<Int32> allocator;
+
+	// 1) 10개 분량 할당: 16바이트 정렬
+	Int32* pValues = allocator.allocate(COUNT);
+	const bool aligned = (reinterpret_cast<UIntPtr>(pValues) % SLIST_ALIGNMENT == 0);
+
+	// 2) 받은 10칸을 모두 쓰고 다시 읽는다
+	for (Int32 i = 0; i < COUNT; ++i)
+		pValues[i] = i * 100;
+
+	bool dataOk = true;
+	for (Int32 i = 0; i < COUNT; ++i)
+	{
+		if (pValues[i] != i * 100)
+			dataOk = false;
+	}
+
+	// 3) 해제
+	allocator.deallocate(pValues, COUNT);
+
+	if (aligned == false || dataOk == false)
+	{
+		std::cout << "[StlAllocatorAllocFree] FAIL : aligned " << aligned << ", dataOk " << dataOk << std::endl;
+		return;
+	}
+
+	std::cout << "[StlAllocatorAllocFree] OK" << std::endl;
+}
+
+void StlAllocatorContainers()
+{
+	constexpr Int32 COUNT = 1000;
+
+	// 1) vector: push_back 중 버퍼 재할당이 여러 번 일어난다
+	std::vector<Int32, StlAllocator<Int32>> values;
+	for (Int32 i = 1; i <= COUNT; ++i)
+		values.push_back(i);
+
+	Int64 sum = 0;
+	for (Int32 value : values)
+		sum += value;
+	const bool vectorOk = (static_cast<Int32>(values.size()) == COUNT && sum == static_cast<Int64>(COUNT) * (COUNT + 1) / 2);
+
+	// 2) map: 키 1~1000 삽입 → 짝수 키 삭제 → 홀수 키 500개가 값(키 × 10)을 그대로 갖는지
+	std::map<Int32, Int32, std::less<Int32>, StlAllocator<std::pair<const Int32, Int32>>> table;
+	for (Int32 key = 1; key <= COUNT; ++key)
+		table.emplace(key, key * 10);
+
+	for (Int32 key = 2; key <= COUNT; key += 2)
+		table.erase(key);
+
+	bool mapOk = (static_cast<Int32>(table.size()) == COUNT / 2);
+	for (const auto& entry : table)
+	{
+		if (entry.first % 2 == 0 || entry.second != entry.first * 10)
+			mapOk = false;
+	}
+
+	if (vectorOk == false || mapOk == false)
+	{
+		std::cout << "[StlAllocatorContainers] FAIL : vectorOk " << vectorOk << " (size " << values.size() << ", sum " << sum << ")"
+			<< ", mapOk " << mapOk << " (size " << table.size() << ")" << std::endl;
+		return;
+	}
+
+	std::cout << "[StlAllocatorContainers] OK" << std::endl;
 }
 
 void CrashMemoryDoubleRelease()
