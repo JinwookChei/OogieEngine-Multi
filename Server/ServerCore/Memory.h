@@ -3,6 +3,7 @@
 #include <vector>
 #include <utility>
 #include <cstddef>
+#include <memory>
 #include "CoreMacro.h"
 #include "Types.h"
 #include "Allocator.h"
@@ -74,3 +75,20 @@ void xdelete(Type* pObj)
 	DefaultAllocator::Release(pObj);
 }
 
+/*
+		[MakeShared]
+		std::make_shared 대신 쓰는 SharedPtr 생성 함수.
+		- 객체는 xnew(DefaultAllocator)로 만들고, 삭제자로 xdelete<Type>을 넘긴다
+		  → 마지막 참조가 사라질 때 delete가 아니라 xdelete로 해제되어 할당/해제 짝이 맞는다.
+		- 삭제자는 생성할 때 컨트롤 블록에 저장된다. 부모 타입 SharedPtr로 옮겨 담아도 xdelete<Type>(실제 타입)이 불린다.
+		- 컨트롤 블록(참조 카운트 + 삭제자)은 아직 표준 라이브러리의 기본 new로 따로 할당된다 (StlAllocator 이후 개선).
+		- xnew와 같이 CoreGlobal이 살아 있는 동안에만 쓴다 (Release는 GMemory를 쓴다).
+*/
+template<typename Type, typename... Args>
+SharedPtr<Type> MakeShared(Args&&... args)
+{
+	Type* pObj = xnew<Type>(std::forward<Args>(args)...);
+	ASSERT_CRASH(pObj != nullptr);
+
+	return SharedPtr<Type>(pObj, xdelete<Type>);
+}

@@ -24,6 +24,8 @@ void MemoryBoundarySizes();       // 경계 크기별 16바이트 정렬, 전체
 void MemoryConcurrent();          // 스레드 4개가 크기 5종을 함께 들고 할당/해제 반복 → 데이터가 섞이지 않음
 void PoolAllocatorAllocFree();    // PoolAllocator 직접 호출: 16바이트 정렬, 읽기/쓰기, 재할당 시 같은 주소, nullptr 해제
 void XnewPoolReuse();             // Release 전용: xnew → xdelete → xnew가 같은 주소인지 (Debug는 SKIP)
+void MakeSharedRefCount();        // 생성자 인자 전달, use_count 변화, 마지막 참조가 사라질 때만 소멸자 1회
+void MakeSharedPoolReuse();       // Release 전용: MakeShared 객체를 reset → xnew가 같은 주소인지 (Debug는 SKIP)
 
 /*
 	크래시 테스트: 호출하면 반드시 크래시가 나야 정상이다. 한 번에 하나만 호출한다.

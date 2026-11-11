@@ -755,6 +755,66 @@ void XnewPoolReuse()
 #endif
 }
 
+/*
+	[Memory 테스트] MakeShared
+*/
+void MakeSharedRefCount()
+{
+	MemoryTestKnight::SConstructCount = 0;
+	MemoryTestKnight::SDestructCount = 0;
+
+	// 1) 생성: 생성자 1회, 인자 전달, 참조 1개
+	SharedPtr<MemoryTestKnight> pKnight = MakeShared<MemoryTestKnight>(100, 10);
+	const bool constructed = (MemoryTestKnight::SConstructCount == 1 && pKnight->hp_ == 100 && pKnight->attack_ == 10);
+	const bool countOne = (pKnight.use_count() == 1);
+
+	// 2) 복사: 같은 객체를 가리키는 참조가 2개
+	SharedPtr<MemoryTestKnight> pCopy = pKnight;
+	const bool countTwo = (pKnight.use_count() == 2 && pCopy.get() == pKnight.get());
+
+	// 3) 복사본 해제: 아직 참조가 남아 있으므로 소멸자가 불리면 안 된다
+	pCopy.reset();
+	const bool aliveAfterCopyReset = (pKnight.use_count() == 1 && MemoryTestKnight::SDestructCount == 0);
+
+	// 4) 마지막 참조 해제: 소멸자가 정확히 1회
+	pKnight.reset();
+	const bool destroyedOnce = (MemoryTestKnight::SDestructCount == 1);
+
+	if (constructed == false || countOne == false || countTwo == false || aliveAfterCopyReset == false || destroyedOnce == false)
+	{
+		std::cout << "[MakeSharedRefCount] FAIL : constructed " << constructed << ", countOne " << countOne << ", countTwo " << countTwo
+			<< ", aliveAfterCopyReset " << aliveAfterCopyReset << ", destroyedOnce " << destroyedOnce << std::endl;
+		return;
+	}
+
+	std::cout << "[MakeSharedRefCount] OK" << std::endl;
+}
+
+void MakeSharedPoolReuse()
+{
+#ifdef _DEBUG
+	// Debug의 DefaultAllocator는 StompAllocator라 풀을 거치지 않는다
+	std::cout << "[MakeSharedPoolReuse] SKIP (Debug는 StompAllocator)" << std::endl;
+#else
+	// MakeShared 객체의 메모리가 풀로 돌아갔다면, 같은 크기의 다음 xnew가 그 블록을 그대로 다시 받는다
+	SharedPtr<MemoryTestKnight> pShared = MakeShared<MemoryTestKnight>(100, 10);
+	MemoryTestKnight* pFirst = pShared.get();
+	pShared.reset();
+
+	MemoryTestKnight* pSecond = xnew<MemoryTestKnight>(200, 20);
+	const bool reused = (pSecond == pFirst);
+	xdelete(pSecond);
+
+	if (reused == false)
+	{
+		std::cout << "[MakeSharedPoolReuse] FAIL : reused " << reused << std::endl;
+		return;
+	}
+
+	std::cout << "[MakeSharedPoolReuse] OK" << std::endl;
+#endif
+}
+
 void CrashMemoryDoubleRelease()
 {
 	void* pPtr = GMemory->Allocate(100);
