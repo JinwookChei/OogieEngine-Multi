@@ -11,10 +11,10 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 Step 8-1 `ObjectPool<T>` 완료** (2026-11-17, 커밋 전). 다음: Step 8-2 (`ObjectPool`용 `MakeShared`) 가이드 |
+| 현재 위치 | **Phase 1-3 Step 8-1 `ObjectPool<T>` 완료, 커밋·push 완료** (2026-11-17, `e3224a1`). 다음: **Step 8-2 가이드를 아직 안 줌** → 세션 시작하면 Claude가 Step 8-2 가이드부터 전달 |
 | 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) / Step 4-1 (Memory, GMemory) / Step 4-2 (PoolAllocator, Release의 `DefaultAllocator` 교체) / Step 5 (MakeShared) / Step 6-1 (StlAllocator, `USize`) / Step 6-2 (MakeShared → `std::allocate_shared`) / Step 7 (Container.h 별칭) / Step 8-1 (ObjectPool, ObjectPoolBase) |
 | 마지막 작업 | 2026-11-17 — Step 8-1: `ObjectPoolBase`는 사용자가 작성, `ObjectPool<Type>` 템플릿·`[ObjectPool]` 블록 주석·테스트 2개(`ObjectPoolPopPush`, `ObjectPoolConcurrent`, 보조 클래스 `ObjectPoolTestBlock`)·프로젝트 등록·`ObjectPool.cpp`의 `pch.h` include는 사용자 요청으로 Claude가 작성. 확인 질문 2개 정리. / 2026-11-11 — 정수 타입 별칭 PascalCase로 변경(`int32` → `Int32`, `SharedPtr<T>` 추가, 커밋 `76e7baa`), Step 5 MakeShared 구현 + 테스트 2개 (`MakeSharedRefCount`, `MakeSharedPoolReuse`), 확인 질문 2개 정리. Notion 업로드 스킬(`notion-sync`) 추가, 학습 정리를 Notion에 Phase 1-3 Step 4-2까지 반영. Step 6-1 StlAllocator + `USize` 별칭 + 테스트 2개 (`StlAllocatorAllocFree`, `StlAllocatorContainers`), 확인 질문 2개 정리. Step 6-2 MakeShared를 `allocate_shared`로 변경 + 테스트 수정/추가 (`MakeSharedPoolReuse`, `MakeSharedWeakHoldsBlock`), 코드와 테스트는 사용자 요청으로 Claude가 작성. Step 7 `Container.h` + 테스트 2개 (`ContainerAliases`, `ContainerString`)는 사용자 요청으로 Claude가 작성, 확인 질문 2개 정리. 학습 정리에서 "🔧 강의와 다른 점" 섹션은 앞으로 쓰지 않기로 함 (기존 것은 유지) |
-| 남은 숙제 | Step 8-1 커밋·push 안 함 (사용자 요청 시). `ObjectPool.cpp`의 `sizeof(MemoryHeader)`를 `static_cast<Int32>`로 맞추기 권장. Notion의 Phase 1-3 페이지에서 옛 다이어그램 embed(아래쪽, "Step 4-1 작성 중" 표시) 삭제는 사용자가 직접 |
+| 남은 숙제 | 없음 (Step 8-1까지 커밋·push 완료). `ObjectPool.cpp`의 `sizeof(MemoryHeader)`를 `static_cast<Int32>`로 맞추기 권장. Notion의 Phase 1-3 페이지에서 옛 다이어그램 embed(아래쪽, "Step 4-1 작성 중" 표시) 삭제는 사용자가 직접 |
 
 **확인 질문 (미답변)**
 - Phase 1-3 Step 6-2 Q1(weak_ptr만 남았을 때 소멸자/메모리 반납 시점, Step 5 방식과 차이), Q2(삭제자 없이도 `~Knight()`가 불리는지, 누가 아는지) — 학습 정리에 `(미답변)`
@@ -31,8 +31,13 @@
 
 **다음에 할 일**
 0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`)
-1. **Phase 1-3 Step 8-2 `ObjectPool`용 `MakeShared`** — 가이드 전달 → 사용자 작성 → 리뷰 (힌트: `SharedPtr<Type>(pObj, Push, StlAllocator<Type>())` 3인자 생성자로 컨트롤 블록도 우리 할당기에)
-2. Phase 1-3 끝나면 README 전체 그림 갱신 + **Notion 업로드 여부를 사용자에게 묻기** (`notion-sync` 스킬)
+1. **Phase 1-3 Step 8-2 `ObjectPool`용 `MakeShared`** (메모리 파트 마지막 Step) — Claude가 CLAUDE.md의 Step 형식(목표/개념/작성 순서+명세+힌트/확인/확인 질문)으로 가이드 전달 → 사용자 작성 → 리뷰 + Debug/Release 빌드·실행
+   - 방향: `ObjectPool<Type>`에 `static SharedPtr<Type> MakeShared(Args&&...)` 추가. `Pop`으로 객체를 만들고 `SharedPtr<Type>(pObj, 삭제자 = Push, StlAllocator<Type>())` 3인자 생성자로 컨트롤 블록도 우리 할당기에서 받는다
+   - 개념 포인트: `Memory.h`의 `MakeShared`(allocate_shared, 객체+컨트롤 블록 한 덩어리)와 달리 **객체(ObjectPool)와 컨트롤 블록(StlAllocator)이 따로** 할당된다 → weak_ptr만 남아도 객체 블록은 바로 풀로 돌아감
+   - 테스트 후보: `ObjectPoolMakeShared` (참조 카운트, 마지막 참조에서 소멸자 1회, Release만 useCount 1 → 0과 같은 주소 재사용)
+2. 아직 답하지 않은 Step 6-2 확인 질문 2개 처리 (사용자 답 또는 해설 요청)
+3. Phase 1-3 끝나면 README 전체 그림 갱신 + **Notion 업로드 여부를 사용자에게 묻기** (`notion-sync` 스킬) → 커밋·push (main 머지는 Phase 1-4 Echo 서버 뒤에 해도 됨)
+4. Phase 1-4 네트워크 시작 (`SocketUtils` → `NetAddress` → IocpCore ...)
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각. **사용자가 "테스트를 작성해 달라"고 요청하면** Claude가 작성하고 Debug/Release 빌드·실행으로 확인한다 (Step 2, 3-1, 3-2는 요청으로 Claude가 작성). 지시할 때는 **테스트 함수 이름과 보조 클래스 이름을 먼저 정해서** 준다. 정상 테스트는 `main`에서 항상 켜 두고, 크래시 테스트(`Crash` 접두사)만 주석으로 둔다. 테스트는 값을 출력만 하지 않고 코드가 비교해서 `OK`/`FAIL`을 낸다.
 
