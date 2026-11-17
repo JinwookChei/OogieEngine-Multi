@@ -31,6 +31,8 @@ void StlAllocatorAllocFree();     // StlAllocator 직접 호출: 16바이트 정
 void StlAllocatorContainers();    // vector 1~1000 push_back 합계, map 1000개 삽입 후 짝수 키 erase → 크기/값 검증
 void ContainerAliases();          // Container.h 별칭: Vector/List/Deque/Map/Set/HashMap/HashSet/Queue/Stack/PriorityQueue 기본 동작
 void ContainerString();           // String/WString: 짧은 문자열, 긴 문자열, 이어 붙이기
+void ObjectPoolPopPush();         // 생성자 인자 전달, 16바이트 정렬, 소멸자 1회, Push(nullptr) / Release만: 같은 주소 재사용, useCount 1 → 0
+void ObjectPoolConcurrent();      // 스레드 4개 × 10,000번 Pop → 값 확인 → Push, 섞임 0 / Release만: useCount 0
 
 /*
 	크래시 테스트: 호출하면 반드시 크래시가 나야 정상이다. 한 번에 하나만 호출한다.

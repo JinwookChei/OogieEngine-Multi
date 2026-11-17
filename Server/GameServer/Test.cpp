@@ -6,6 +6,7 @@
 #include "Lock.h"
 #include "Memory.h"
 #include "MemoryPool.h"
+#include "ObjectPool.h"
 #include "Test.h"
 
 
@@ -1055,6 +1056,151 @@ void ContainerString()
 	}
 
 	std::cout << "[ContainerString] OK" << std::endl;
+}
+
+/*
+	[Memory 테스트] ObjectPool
+*/
+void ObjectPoolPopPush()
+{
+	MemoryTestKnight::SConstructCount = 0;
+	MemoryTestKnight::SDestructCount = 0;
+
+	// 1) Pop: 생성자가 한 번 호출되고, 인자가 그대로 전달되고, 주소가 16바이트 정렬이어야 한다
+	MemoryTestKnight* pKnight = ObjectPool<MemoryTestKnight>::Pop(100, 10);
+	if (MemoryTestKnight::SConstructCount != 1 || MemoryTestKnight::SDestructCount != 0)
+	{
+		std::cout << "[ObjectPoolPopPush] FAIL : Pop 후 생성자/소멸자 호출 횟수 (construct "
+			<< MemoryTestKnight::SConstructCount << ", destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
+		return;
+	}
+	if (pKnight->hp_ != 100 || pKnight->attack_ != 10)
+	{
+		std::cout << "[ObjectPoolPopPush] FAIL : 생성자 인자 전달 (hp " << pKnight->hp_ << ", attack " << pKnight->attack_ << ")" << std::endl;
+		return;
+	}
+	if (reinterpret_cast<UIntPtr>(pKnight) % 16 != 0)
+	{
+		std::cout << "[ObjectPoolPopPush] FAIL : 16바이트 정렬이 아니다 (" << pKnight << ")" << std::endl;
+		return;
+	}
+
+#ifndef _DEBUG
+	// Release만: 풀이 사용 중인 객체를 센다
+	if (ObjectPool<MemoryTestKnight>::GetUseCount() != 1)
+	{
+		std::cout << "[ObjectPoolPopPush] FAIL : Pop 후 useCount " << ObjectPool<MemoryTestKnight>::GetUseCount() << " (expected 1)" << std::endl;
+		return;
+	}
+#endif
+
+	// 2) Push: 소멸자가 한 번 호출되어야 한다
+	MemoryTestKnight* pFirstAddr = pKnight;
+	ObjectPool<MemoryTestKnight>::Push(pKnight);
+	if (MemoryTestKnight::SDestructCount != 1)
+	{
+		std::cout << "[ObjectPoolPopPush] FAIL : Push 후 소멸자 호출 횟수 (destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
+		return;
+	}
+
+	// 3) Push(nullptr): 크래시 없이 아무 일도 하지 않아야 한다 (소멸자 호출 X)
+	MemoryTestKnight* pNullKnight = nullptr;
+	ObjectPool<MemoryTestKnight>::Push(pNullKnight);
+	if (MemoryTestKnight::SDestructCount != 1)
+	{
+		std::cout << "[ObjectPoolPopPush] FAIL : Push(nullptr)이 소멸자를 호출했다 (destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
+		return;
+	}
+
+#ifdef _DEBUG
+	// Debug는 StompAllocator라 풀을 거치지 않는다 → 재사용, useCount는 검사하지 않는다
+	std::cout << "[ObjectPoolPopPush] OK (재사용/useCount 검사는 Release만)" << std::endl;
+#else
+	// 4) Release만: Push 후 useCount가 0이고, 다음 Pop이 같은 블록을 다시 받아야 한다
+	const Int32 useCountAfterPush = ObjectPool<MemoryTestKnight>::GetUseCount();
+
+	MemoryTestKnight* pSecond = ObjectPool<MemoryTestKnight>::Pop(200, 20);
+	const bool reused = (pSecond == pFirstAddr);
+	const bool constructed = (pSecond->hp_ == 200 && pSecond->attack_ == 20);
+	ObjectPool<MemoryTestKnight>::Push(pSecond);
+
+	if (useCountAfterPush != 0 || reused == false || constructed == false || ObjectPool<MemoryTestKnight>::GetUseCount() != 0)
+	{
+		std::cout << "[ObjectPoolPopPush] FAIL : useCount after push " << useCountAfterPush << " (expected 0), reused " << reused
+			<< ", constructed " << constructed << ", final useCount " << ObjectPool<MemoryTestKnight>::GetUseCount() << std::endl;
+		return;
+	}
+
+	std::cout << "[ObjectPoolPopPush] OK" << std::endl;
+#endif
+}
+
+// ObjectPoolConcurrent 전용. 생성할 때 모든 칸을 mark로 채운다
+// (MemoryTestKnight의 static 카운터는 atomic이 아니라 여러 스레드에서 쓰면 데이터 레이스가 된다)
+class ObjectPoolTestBlock
+{
+public:
+	explicit ObjectPoolTestBlock(Int32 mark)
+	{
+		for (Int32 i = 0; i < VALUE_COUNT; ++i)
+			values_[i] = mark;
+	}
+
+	static constexpr Int32 VALUE_COUNT = 16;
+	Int32 values_[VALUE_COUNT];
+};
+
+void ObjectPoolConcurrent()
+{
+	constexpr Int32 THREAD_COUNT = 4;
+	constexpr Int32 REPEAT_COUNT = 10'000;
+
+	Atomic<Int32> badDataCount{ 0 };
+
+	for (Int32 t = 0; t < THREAD_COUNT; ++t)
+	{
+		GThreadManager->Launch([&badDataCount, t]()
+			{
+				// 스레드마다 다른 값으로 채운다. 두 스레드가 같은 블록을 동시에 받으면 값이 섞인다
+				const Int32 mark = t + 1;
+
+				for (Int32 i = 0; i < REPEAT_COUNT; ++i)
+				{
+					ObjectPoolTestBlock* pBlock = ObjectPool<ObjectPoolTestBlock>::Pop(mark);
+
+					for (Int32 j = 0; j < ObjectPoolTestBlock::VALUE_COUNT; ++j)
+					{
+						if (pBlock->values_[j] != mark)
+						{
+							badDataCount.fetch_add(1);
+							break;
+						}
+					}
+
+					ObjectPool<ObjectPoolTestBlock>::Push(pBlock);
+				}
+			});
+	}
+	GThreadManager->Join();
+
+#ifdef _DEBUG
+	if (badDataCount.load() != 0)
+	{
+		std::cout << "[ObjectPoolConcurrent] FAIL : bad data " << badDataCount.load() << " (expected 0)" << std::endl;
+		return;
+	}
+
+	std::cout << "[ObjectPoolConcurrent] OK (useCount 검사는 Release만)" << std::endl;
+#else
+	const Int32 useCount = ObjectPool<ObjectPoolTestBlock>::GetUseCount();
+	if (badDataCount.load() != 0 || useCount != 0)
+	{
+		std::cout << "[ObjectPoolConcurrent] FAIL : bad data " << badDataCount.load() << " (expected 0), useCount " << useCount << " (expected 0)" << std::endl;
+		return;
+	}
+
+	std::cout << "[ObjectPoolConcurrent] OK" << std::endl;
+#endif
 }
 
 void CrashMemoryDoubleRelease()

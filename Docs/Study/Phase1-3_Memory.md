@@ -14,6 +14,7 @@
 | 6-1 | `Memory.h`, `Types.h` | StlAllocator (STL 컨테이너가 `DefaultAllocator`를 쓰게 하는 어댑터, `USize` 별칭) | ✅ |
 | 6-2 | `Memory.h` | MakeShared → `std::allocate_shared` + `StlAllocator` (컨트롤 블록 + 객체를 한 번에) | ✅ |
 | 7 | `Container.h`, `CorePch.h` | 컨테이너 별칭 (`Vector`, `Map`, `HashMap`, `Queue`, `String` ...) | ✅ |
+| 8-1 | `ObjectPool.h/.cpp` | ObjectPool (타입 전용 풀, `ObjectPoolBase`로 MemoryPool/Windows.h를 .cpp에 감춤) | ✅ |
 
 ---
 
@@ -1387,3 +1388,129 @@ using String = std::basic_string<char, std::char_traits<char>, StlAllocator<char
 **Q2. `String s = "Hello";`처럼 짧은 문자열을 만들 때 `StlAllocator::allocate`가 불릴까?**
 > ❌ 내 답: 네 (불린다).
 > 💬 정답: **불리지 않는다.** MSVC `std::basic_string`은 객체 안에 16바이트 버퍼를 갖고 있어(SSO), `String`은 15자, `WString`은 7자까지 할당 없이 저장한다. 그보다 길어질 때만 `allocate`를 부른다. 그래서 `ContainerString`은 25자 문자열과 이어 붙여 길어지는 경우를 따로 확인한다.
+
+---
+
+## Step 8-1. ObjectPool
+
+### 🎯 목표
+타입 하나만 담는 전용 풀 `ObjectPool<Type>`을 만든다. `Pop(args...)`로 꺼내고 `Push(pObj)`로 돌려준다. Debug는 `StompAllocator`, Release만 전용 풀을 쓴다.
+
+### 📖 개념 1 — 공용 사물함 vs 전용 사물함
+| | `GMemory` (Step 4-1) | `ObjectPool<Type>` |
+|---|---|---|
+| 풀 기준 | 크기 구간 (여러 타입이 같은 풀을 나눠 씀) | 타입 하나 |
+| 블록 크기 | 요청보다 조금 클 수 있음 | `sizeof(Type) + 헤더`에 딱 맞음 |
+| 개수 확인 | 크기별 개수만 | 타입별 사용 중 개수 (`GetUseCount`) |
+| 버그 범위 | 해제 후 접근이 같은 블록을 받은 **다른 타입**을 망가뜨림 | 같은 타입 안으로 좁혀짐 |
+
+> 💡 **비유**: `GMemory`는 크기별 공용 사물함, `ObjectPool<Knight>`는 Knight 전용 사물함이다. 전용 사물함은 칸이 딱 맞고, 몇 칸이 쓰이는지 바로 보이고, 다른 손님이 내 칸을 받지 않는다.
+
+### 📖 개념 2 — 템플릿과 Windows.h 경계 (ObjectPoolBase)
+```
+ObjectPool.h (공개)                         ObjectPool.cpp (ServerCore 안)
+──────────────────────────                  ──────────────────────────────
+class MemoryPool;      ← 이름만 알림         #include "MemoryPool.h"  ← 여기서만 Windows.h
+class ObjectPoolBase                         new MemoryPool(...)
+{  MemoryPool* pPool_; }  ← 포인터만         pPool_->Pop() / Push()
+template ObjectPool<T> → ObjectPoolBase만 호출
+```
+- 템플릿은 쓰는 쪽에서 컴파일되므로 **헤더에 전부 있어야** 한다. `ObjectPool<T>`가 `MemoryPool`을 값 멤버로 가지면 `MemoryPool.h`(Windows.h)가 GameServer와 클라이언트 엔진까지 퍼진다.
+- 포인터는 크기가 항상 8바이트라 **전방 선언만으로** 멤버를 만들 수 있다. `MemoryPool`의 정의가 필요한 코드는 템플릿이 아닌 `ObjectPoolBase`의 `.cpp`에만 둔다 (Pimpl 기법).
+
+### 📖 개념 3 — 타입마다 풀 하나 (함수 안 static)
+- `GetBase()` 안의 `static ObjectPoolBase SBase(sizeof(Type))`는 템플릿 인자마다 따로 생긴다 → `ObjectPool<Knight>`와 `ObjectPool<Monster>`는 다른 풀.
+- 처음 호출될 때 한 번만 만들어지고, C++11부터 이 초기화는 스레드 안전하다.
+- Debug에서는 `GetBase()`를 부르지 않으므로 풀이 만들어지지도 않는다.
+
+### 🧱 핵심 코드
+```cpp
+// ObjectPool.cpp
+ObjectPoolBase::ObjectPoolBase(Int32 dataSize)
+{
+	blockSize_ = dataSize + sizeof(MemoryHeader);   // 헤더 포함 블록 크기
+	pPool_ = new MemoryPool(blockSize_);
+}
+
+void* ObjectPoolBase::Alloc()
+{
+	MemoryHeader* pHeader = pPool_->Pop();
+	void* pObject = MemoryHeader::AttachHeader(pHeader, blockSize_);
+	return pObject;
+}
+
+void ObjectPoolBase::Release(void* pPtr)
+{
+	MemoryHeader* pHeader = MemoryHeader::DetachHeader(pPtr);
+	pPool_->Push(pHeader);
+}
+```
+- `AttachHeader(pHeader, size)`: `pHeader`는 헤더를 만들 블록 시작 주소, `size`는 헤더의 `allocSize_`에 적을 **헤더 포함 블록 크기**다. 이 값이 0보다 크면 "사용 중" 표시가 되어 `Push`의 이중 해제 검사가 동작한다.
+
+```cpp
+// ObjectPool.h (일부)
+template<typename Type>
+class ObjectPool
+{
+public:
+	STATIC_ASSERT(alignof(Type) <= 16, "ObjectPool supports alignment up to 16 bytes");
+
+	template<typename... Args>
+	static Type* Pop(Args&&... args)
+	{
+#ifdef _DEBUG
+		void* pMemory = StompAllocator::Alloc(static_cast<Int32>(sizeof(Type)));
+#else
+		void* pMemory = GetBase().Alloc();
+#endif
+		Type* pObj = new(pMemory) Type(std::forward<Args>(args)...);
+		return pObj;
+	}
+
+	static void Push(Type* pObj)
+	{
+		if (pObj == nullptr)
+			return;
+
+		pObj->~Type();
+#ifdef _DEBUG
+		StompAllocator::Release(pObj);
+#else
+		GetBase().Release(pObj);
+#endif
+	}
+
+private:
+	static ObjectPoolBase& GetBase()
+	{
+		static ObjectPoolBase SBase(static_cast<Int32>(sizeof(Type)));
+		return SBase;
+	}
+};
+```
+- `Pop`과 `Push`는 같은 `#ifdef`로 나눠서 **받은 곳으로 돌려주는** 짝을 맞춘다. `Pop`한 객체를 `delete`/`xdelete`로 지우면 다른 곳에 반납된다.
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| `MemoryPool.h`에 `#include "ObjectPool.h"`를 넣음 | 포함 방향이 반대 (MemoryPool은 ObjectPool을 몰라도 됨) | 필요한 쪽(`ObjectPool.cpp`)이 include한다 |
+| `ObjectPool.h/.cpp`를 프로젝트에 등록 안 함 | `.cpp`가 컴파일되지 않아 Release `Pop`에서 링크 에러 | 새 파일은 `.vcxproj`/`.filters` 등록까지 확인 (Claude가 등록) |
+| `ObjectPool.cpp`에 `#include "pch.h"` 없음 | PCH를 쓰는 프로젝트라 C1010 | ServerCore `.cpp`의 첫 줄은 `pch.h` (Claude가 추가) |
+| `AttachHeader` 반환값을 버리고 `nullptr` 반환 (작성 중) | 사용자가 데이터 주소를 못 받음 | `AttachHeader`가 돌려주는 헤더 뒤 주소를 그대로 반환 |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `ObjectPoolPopPush` | 생성자 1회·인자 전달·16바이트 정렬, Push 후 소멸자 1회, `Push(nullptr)` 무시 / Release만: useCount 1 → 0, 다음 Pop이 같은 주소 재사용 | `OK` (Debug/Release) |
+| `ObjectPoolConcurrent` | 스레드 4개 × 10,000번 `Pop(mark)` → 16칸 확인 → Push, 섞임 0 / Release만: useCount 0. 보조 클래스 `ObjectPoolTestBlock` (`MemoryTestKnight`의 static 카운터는 atomic이 아니라 동시성 테스트에 쓰지 않음) | `OK` (Debug/Release) |
+
+> 📝 2026-11-17: `ObjectPoolBase`는 사용자가 작성했다. `ObjectPool<Type>` 템플릿, `[ObjectPool]` 블록 주석, 테스트, 프로젝트 등록은 사용자 요청으로 Claude가 작성했다.
+
+### 🧩 복습 질문
+**Q1. `GMemory`가 있는데 타입별 풀을 따로 두면 좋은 점은? (2가지 이상)**
+> ✅ 내 답: 타입별 객체가 몇 개 생성되어 있는지 알 수 있다. 딱 맞게 메모리를 효율적으로 사용할 수 있다.
+> 💬 보충: 하나 더 — **오염 격리**. `GMemory`에서는 크기가 비슷한 다른 타입이 같은 블록을 번갈아 받으므로, Knight의 해제 후 접근이 Monster 데이터를 망가뜨리고 크래시도 Monster 코드에서 난다. 전용 풀이면 범위가 Knight 안으로 좁혀진다. 타입별 개수는 누수 추적에 쓴다 (접속자 0인데 `GameSession` 100개 → Push 누락).
+
+**Q2. `MemoryPool`을 헤더 멤버로 두지 않고 `ObjectPoolBase`(.cpp) + 포인터로 감싼 이유는?**
+> ❓ 내 답: 모르겠다.
+> 💬 해설: 템플릿 `ObjectPool<T>`는 헤더에 전부 있어야 하므로, `MemoryPool`을 값 멤버로 두면 `MemoryPool.h`(Windows.h)가 이 헤더를 쓰는 모든 곳(GameServer, 클라이언트 엔진)으로 퍼진다. 포인터는 전방 선언만으로 둘 수 있으니, `MemoryPool`을 실제로 다루는 코드는 템플릿이 아닌 `ObjectPoolBase`의 `.cpp`에 숨긴다 (Pimpl). 창구 직원(`ObjectPoolBase`)만 창고(`MemoryPool`)에 들어가는 구조다.
