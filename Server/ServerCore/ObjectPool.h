@@ -4,6 +4,7 @@
 #include "Types.h"
 #include "CoreMacro.h"
 #include "Allocator.h"
+#include "Memory.h"
 
 /*
 				[ObjectPool]
@@ -20,6 +21,14 @@
 				헤더에는 전방 선언과 포인터(pPool_)만 남긴다.
 
 				⚠️ Pop으로 받은 객체는 반드시 Push로 돌려준다. delete, xdelete로 지우면 받은 곳과 다른 곳에 반납된다.
+
+				[MakeShared]
+				Pop으로 꺼낸 객체를 SharedPtr로 감싸서 돌려준다. 강한 참조가 0이 되면 삭제자(Push)가 불려 풀로 돌아간다.
+				- 객체는 ObjectPool<Type>에서, 컨트롤 블록(참조 카운트, 삭제자)은 StlAllocator에서 따로 받는다.
+				  그래서 weak_ptr이 남아 있어도 객체 블록은 강한 참조가 0이 되는 즉시 풀로 돌아가고, 컨트롤 블록만 남는다.
+				- 컨트롤 블록을 할당하다 실패하면 SharedPtr 생성자가 삭제자(Push)를 불러 객체를 돌려준 뒤 예외를 던진다 (누수 없음).
+				- MakeShared로 받은 객체는 SharedPtr가 관리한다. get()으로 얻은 포인터를 직접 Push하면 이중 반납이 된다.
+				- Release의 StlAllocator는 GMemory를 쓰므로 CoreGlobal이 살아 있는 동안에만 쓴다.
 */
 class MemoryPool;
 class ObjectPoolBase
@@ -88,6 +97,17 @@ public:
 #else
 		return GetBase().GetUseCount();
 #endif
+	}
+
+	// 풀에서 꺼낸 객체를 SharedPtr로 감싼다. 마지막 강한 참조가 사라지면 Push가 불린다
+	template<typename... Args>
+	static SharedPtr<Type> MakeShared(Args&&... args)
+	{
+		// ① 객체는 이 풀에서 받는다
+		Type* pObj = Pop(std::forward<Args>(args)...);
+
+		// ② 삭제자 = Push, 컨트롤 블록은 StlAllocator로 받는다
+		return SharedPtr<Type>(pObj, Push, StlAllocator<Type>());
 	}
 
 private:

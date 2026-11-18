@@ -87,9 +87,6 @@ void xdelete(Type* pObj)
 template<typename Type>
 class StlAllocator
 {
-	// 할당기들은 16바이트 정렬까지만 보장한다 (xnew와 같은 검사)
-	STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
-
 public:
 	using value_type = Type;
 
@@ -101,6 +98,11 @@ public:
 
 	Type* allocate(USize count)
 	{
+		// 할당기들은 16바이트 정렬까지만 보장한다 (xnew와 같은 검사)
+		// 클래스 본문이 아니라 여기서 검사한다: shared_ptr의 컨트롤 블록은 자기 안에 StlAllocator<컨트롤 블록>을 멤버로 가지므로,
+		// 클래스가 만들어지는 시점에는 Type이 아직 불완전 타입이라 alignof를 쓸 수 없다. allocate가 불릴 때는 완전한 타입이다
+		STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
+
 		// 아래 곱셈 결과가 Int32를 넘지 않도록 곱하기 전에 나눗셈으로 확인한다
 		ASSERT_CRASH(count <= INT32_MAX / sizeof(Type));
 

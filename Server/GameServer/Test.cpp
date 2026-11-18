@@ -1203,6 +1203,80 @@ void ObjectPoolConcurrent()
 #endif
 }
 
+void ObjectPoolMakeShared()
+{
+	// 다른 테스트가 먼저 MemoryTestKnight를 써도 기댓값이 틀어지지 않게 초기화한다
+	MemoryTestKnight::SConstructCount = 0;
+	MemoryTestKnight::SDestructCount = 0;
+
+	// 1) 생성: 참조 1개, 생성자 1회, 인자가 그대로 전달되어야 한다
+	SharedPtr<MemoryTestKnight> pKnight = ObjectPool<MemoryTestKnight>::MakeShared(100, 10);
+	const bool constructed = (pKnight.use_count() == 1 && MemoryTestKnight::SConstructCount == 1
+		&& pKnight->hp_ == 100 && pKnight->attack_ == 10);
+	if (constructed == false)
+	{
+		std::cout << "[ObjectPoolMakeShared] FAIL : 생성 직후 use_count " << pKnight.use_count()
+			<< ", construct " << MemoryTestKnight::SConstructCount << std::endl;
+		return;
+	}
+
+#ifndef _DEBUG
+	// Release만: 객체 블록을 ObjectPool<MemoryTestKnight>에서 받았는지 확인한다
+	if (ObjectPool<MemoryTestKnight>::GetUseCount() != 1)
+	{
+		std::cout << "[ObjectPoolMakeShared] FAIL : 생성 후 useCount " << ObjectPool<MemoryTestKnight>::GetUseCount() << " (expected 1)" << std::endl;
+		return;
+	}
+#endif
+
+	// 2) 복사: 참조 2개. 복사본을 먼저 놓아도 객체는 살아 있어야 한다
+	SharedPtr<MemoryTestKnight> pCopy = pKnight;
+	const bool copied = (pKnight.use_count() == 2);
+	pCopy.reset();
+	const bool aliveAfterCopyReset = (pKnight.use_count() == 1 && MemoryTestKnight::SDestructCount == 0);
+	if (copied == false || aliveAfterCopyReset == false)
+	{
+		std::cout << "[ObjectPoolMakeShared] FAIL : copied " << copied << ", alive after copy reset " << aliveAfterCopyReset
+			<< " (destruct " << MemoryTestKnight::SDestructCount << ")" << std::endl;
+		return;
+	}
+
+	// 3) weak_ptr을 남긴 채 마지막 SharedPtr를 놓는다 → 삭제자(Push)가 불려 소멸자 1회
+	std::weak_ptr<MemoryTestKnight> weak = pKnight;
+	MemoryTestKnight* pFirstAddr = pKnight.get();
+	pKnight.reset();
+	if (MemoryTestKnight::SDestructCount != 1 || weak.expired() == false)
+	{
+		std::cout << "[ObjectPoolMakeShared] FAIL : 마지막 reset 후 destruct " << MemoryTestKnight::SDestructCount
+			<< " (expected 1), expired " << weak.expired() << std::endl;
+		return;
+	}
+
+#ifdef _DEBUG
+	// Debug는 StompAllocator라 풀을 거치지 않는다 → useCount, 재사용은 검사하지 않는다
+	std::cout << "[ObjectPoolMakeShared] OK (풀 반납/재사용 검사는 Release만)" << std::endl;
+#else
+	// 4) Release만: weak_ptr이 아직 살아 있어도 객체 블록은 이미 풀로 돌아갔어야 한다
+	const Int32 useCountWithWeak = ObjectPool<MemoryTestKnight>::GetUseCount();
+
+	// 5) Release만: 다시 만들면 방금 돌아간 블록(같은 주소)을 받아야 한다
+	SharedPtr<MemoryTestKnight> pSecond = ObjectPool<MemoryTestKnight>::MakeShared(200, 20);
+	const bool reused = (pSecond.get() == pFirstAddr);
+	const bool secondConstructed = (pSecond->hp_ == 200 && pSecond->attack_ == 20);
+	pSecond.reset();
+	weak.reset();
+
+	if (useCountWithWeak != 0 || reused == false || secondConstructed == false || ObjectPool<MemoryTestKnight>::GetUseCount() != 0)
+	{
+		std::cout << "[ObjectPoolMakeShared] FAIL : useCount with weak " << useCountWithWeak << " (expected 0), reused " << reused
+			<< ", constructed " << secondConstructed << ", final useCount " << ObjectPool<MemoryTestKnight>::GetUseCount() << std::endl;
+		return;
+	}
+
+	std::cout << "[ObjectPoolMakeShared] OK" << std::endl;
+#endif
+}
+
 void CrashMemoryDoubleRelease()
 {
 	void* pPtr = GMemory->Allocate(100);
