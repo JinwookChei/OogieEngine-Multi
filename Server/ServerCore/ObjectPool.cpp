@@ -4,7 +4,7 @@
 
 ObjectPoolBase::ObjectPoolBase(Int32 dataSize)
 {
-	blockSize_ = dataSize + static_cast <Int32>(sizeof(MemoryHeader));
+	blockSize_ = dataSize + static_cast<Int32>(sizeof(MemoryHeader));
 	pPool_ = new MemoryPool(blockSize_);
 }
 
