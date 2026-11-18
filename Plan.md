@@ -11,11 +11,11 @@
 | 항목 | 상태 |
 |---|---|
 | 작업 브랜치 | `feature/phase1-servercore` |
-| 현재 위치 | **Phase 1-3 전체 Step 완료, 확인 질문도 모두 정리** (2026-11-18). 다음: Phase 1-3 마무리 (README 전체 그림, Notion 업로드 여부, 커밋·push) |
+| 현재 위치 | **Phase 1-3 완료** (2026-11-18, 코드·테스트·학습 정리·다이어그램·Notion·커밋 모두 끝). 다음: **Phase 1-4 Step 1 `SocketUtils` 안내부터 시작** (아직 설명 전) |
 | 완료 | Phase 0 / Phase 1-1 전체 / Phase 1-2 전체 (Lock, LockGuard, 매크로, DeadLockProfiler Push/Pop/CheckCycle, 사이클 테스트) / Phase 1-3 Step 1 (BaseAllocator, xnew/xdelete) / Step 2 (StompAllocator, `DefaultAllocator` Debug 전용) / Step 3-1 (MemoryHeader) / Step 3-2 (MemoryPool) / Step 4-1 (Memory, GMemory) / Step 4-2 (PoolAllocator, Release의 `DefaultAllocator` 교체) / Step 5 (MakeShared) / Step 6-1 (StlAllocator, `USize`) / Step 6-2 (MakeShared → `std::allocate_shared`) / Step 7 (Container.h 별칭) / Step 8-1 (ObjectPool, ObjectPoolBase) / Step 8-2 (ObjectPool::MakeShared) |
-| 마지막 작업 | 2026-11-18 — 다이어그램: `Docs/Diagrams/Phase1-3_Memory.html`을 Step 8-2까지 확장(입구별 경로, Stomp 계산기, MemoryPool 조작, Vector 재할당, ObjectPool, 두 MakeShared는 "답 보기" 버튼 뒤), 새 파일 `Phase1-3_MemoryPool.html`(Memory ↔ MemoryPool 관계). 학습 정리에 링크 2줄. StlAllocator 설명 + Step 8-2 Q1·Q2, Step 6-2 Q1·Q2 해설 기록 (해설 요청). / 2026-11-18 — Step 8-2: `MakeShared`는 사용자가 쓰다가 막혀서 요청으로 Claude가 작성 (`Pop` → 3인자 `SharedPtr(pObj, Push, StlAllocator<Type>())`), `[MakeShared]` 블록 주석 추가. 테스트 `ObjectPoolMakeShared`는 요청으로 Claude가 작성. 이때 `StlAllocator` 클래스 본문의 `STATIC_ASSERT(alignof(Type))`가 불완전 타입(컨트롤 블록) 때문에 C2139를 내서 `allocate()` 안으로 옮김. Debug/Release 전체 OK. / 2026-11-17 — Step 8-1: `ObjectPoolBase`는 사용자가 작성, `ObjectPool<Type>` 템플릿·`[ObjectPool]` 블록 주석·테스트 2개(`ObjectPoolPopPush`, `ObjectPoolConcurrent`, 보조 클래스 `ObjectPoolTestBlock`)·프로젝트 등록·`ObjectPool.cpp`의 `pch.h` include는 사용자 요청으로 Claude가 작성. 확인 질문 2개 정리. / 2026-11-11 — 정수 타입 별칭 PascalCase로 변경(`int32` → `Int32`, `SharedPtr<T>` 추가, 커밋 `76e7baa`), Step 5 MakeShared 구현 + 테스트 2개 (`MakeSharedRefCount`, `MakeSharedPoolReuse`), 확인 질문 2개 정리. Notion 업로드 스킬(`notion-sync`) 추가, 학습 정리를 Notion에 Phase 1-3 Step 4-2까지 반영. Step 6-1 StlAllocator + `USize` 별칭 + 테스트 2개 (`StlAllocatorAllocFree`, `StlAllocatorContainers`), 확인 질문 2개 정리. Step 6-2 MakeShared를 `allocate_shared`로 변경 + 테스트 수정/추가 (`MakeSharedPoolReuse`, `MakeSharedWeakHoldsBlock`), 코드와 테스트는 사용자 요청으로 Claude가 작성. Step 7 `Container.h` + 테스트 2개 (`ContainerAliases`, `ContainerString`)는 사용자 요청으로 Claude가 작성, 확인 질문 2개 정리. 학습 정리에서 "🔧 강의와 다른 점" 섹션은 앞으로 쓰지 않기로 함 (기존 것은 유지) |
+| 마지막 작업 | 2026-11-18 (세션 끝) — Phase 1-3 마무리: README 전체 그림 갱신, Notion 업로드(Phase 1-3 Step 5~8-2 추가 + 다이어그램 2개), 커밋 `3e7181a`(Step 8-2 코드)·`60e54f9`(문서) push, `ObjectPool.cpp` `static_cast` 띄어쓰기 수정. / 2026-11-18 — 다이어그램: `Docs/Diagrams/Phase1-3_Memory.html`을 Step 8-2까지 확장(입구별 경로, Stomp 계산기, MemoryPool 조작, Vector 재할당, ObjectPool, 두 MakeShared는 "답 보기" 버튼 뒤), 새 파일 `Phase1-3_MemoryPool.html`(Memory ↔ MemoryPool 관계). 학습 정리에 링크 2줄. StlAllocator 설명 + Step 8-2 Q1·Q2, Step 6-2 Q1·Q2 해설 기록 (해설 요청). / 2026-11-18 — Step 8-2: `MakeShared`는 사용자가 쓰다가 막혀서 요청으로 Claude가 작성 (`Pop` → 3인자 `SharedPtr(pObj, Push, StlAllocator<Type>())`), `[MakeShared]` 블록 주석 추가. 테스트 `ObjectPoolMakeShared`는 요청으로 Claude가 작성. 이때 `StlAllocator` 클래스 본문의 `STATIC_ASSERT(alignof(Type))`가 불완전 타입(컨트롤 블록) 때문에 C2139를 내서 `allocate()` 안으로 옮김. Debug/Release 전체 OK. / 2026-11-17 — Step 8-1: `ObjectPoolBase`는 사용자가 작성, `ObjectPool<Type>` 템플릿·`[ObjectPool]` 블록 주석·테스트 2개(`ObjectPoolPopPush`, `ObjectPoolConcurrent`, 보조 클래스 `ObjectPoolTestBlock`)·프로젝트 등록·`ObjectPool.cpp`의 `pch.h` include는 사용자 요청으로 Claude가 작성. 확인 질문 2개 정리. / 2026-11-11 — 정수 타입 별칭 PascalCase로 변경(`int32` → `Int32`, `SharedPtr<T>` 추가, 커밋 `76e7baa`), Step 5 MakeShared 구현 + 테스트 2개 (`MakeSharedRefCount`, `MakeSharedPoolReuse`), 확인 질문 2개 정리. Notion 업로드 스킬(`notion-sync`) 추가, 학습 정리를 Notion에 Phase 1-3 Step 4-2까지 반영. Step 6-1 StlAllocator + `USize` 별칭 + 테스트 2개 (`StlAllocatorAllocFree`, `StlAllocatorContainers`), 확인 질문 2개 정리. Step 6-2 MakeShared를 `allocate_shared`로 변경 + 테스트 수정/추가 (`MakeSharedPoolReuse`, `MakeSharedWeakHoldsBlock`), 코드와 테스트는 사용자 요청으로 Claude가 작성. Step 7 `Container.h` + 테스트 2개 (`ContainerAliases`, `ContainerString`)는 사용자 요청으로 Claude가 작성, 확인 질문 2개 정리. 학습 정리에서 "🔧 강의와 다른 점" 섹션은 앞으로 쓰지 않기로 함 (기존 것은 유지) |
 | Notion | Phase 1-3 전체(Step 8-2까지) + 다이어그램 2개 반영 (2026-11-18). Phase 1-3 페이지 "🗑️ 옛 다이어그램 (삭제 예정)" 섹션(제목 + embed 2개)은 사용자가 직접 삭제 |
-| 남은 숙제 | `ObjectPool.cpp`의 `sizeof(MemoryHeader)`를 `static_cast<Int32>`로 맞추기 권장. |
+| 남은 숙제 | 없음 (`ObjectPool.cpp`의 `static_cast <Int32>` 띄어쓰기 2026-11-18 수정) |
 
 **확인 질문 (미답변)**
 - 없음. Phase 1-3 Step 6-2 Q1·Q2, Step 8-2 Q1·Q2는 2026-11-18 해설 요청으로 Claude가 `💬 해설` 기록
@@ -31,11 +31,12 @@
 - 사소함: `#endif // DEBUG` → `// _DEBUG`, `CoreTLS.h` 주석 스페이스 들여쓰기, `Lock.cpp`의 대화 주석 블록(`MEMO:` 표시 없음)
 
 **다음에 할 일**
-0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`)
-1. ~~Step 8-2 확인 질문~~ 완료 (Q1, Q2 해설 기록)
-2. ~~Step 6-2 확인 질문~~ 완료 (Q1, Q2 해설 기록)
-3. Phase 1-3 끝나면 README 전체 그림 갱신 + **Notion 업로드 여부를 사용자에게 묻기** (`notion-sync` 스킬) → 커밋·push (main 머지는 Phase 1-4 Echo 서버 뒤에 해도 됨)
-4. Phase 1-4 네트워크 시작 (`SocketUtils` → `NetAddress` → IocpCore ...)
+0. 작업 시작 전 `git pull` (브랜치 `feature/phase1-servercore`). 새 PC면 `Setup.md` 확인 (Protobuf lib, `MMOServer_example/`)
+1. **Phase 1-4 Step 1: `SocketUtils`** — Step 구성(목표 → 개념 → 작성 순서·명세·힌트 → 확인 → 확인 질문)으로 안내. 다룰 것: `WSAStartup`/`WSACleanup`(CoreGlobal 생성·소멸 순서), `WSAIoctl`로 `AcceptEx`/`ConnectEx`/`DisconnectEx` 함수 포인터 얻기, 소켓 옵션(`SO_REUSEADDR`, `SO_LINGER`, `TCP_NODELAY`, `SO_UPDATE_ACCEPT_CONTEXT`), `CreateSocket`(`WSASocket` + `WSA_FLAG_OVERLAPPED`)
+   - ⚠️ `WinSock2.h`/`MSWSock.h`는 `Windows.h`보다 먼저 include해야 하고, `CorePch.h`·공개 헤더로 퍼지면 안 된다 (CLAUDE.md `Windows.h` 범위 규칙). `ws2_32.lib` 링크 필요
+   - 학습 정리는 새 파일 `Docs/Study/Phase1-4_Network.md` + README 목차 행 추가, 다이어그램은 필요하면 `Docs/Diagrams/Phase1-4_IOCP.html`
+2. 이어서 `NetAddress` → `IocpCore`/`IocpObject`/`IocpEvent` → `Listener` → `Session` → `Service` → Echo 서버 테스트 (아래 Phase 1-4 체크리스트). Echo 서버가 동작하면 main 머지 고려
+3. (사용자) Notion Phase 1-3 페이지의 "🗑️ 옛 다이어그램 (삭제 예정)" 섹션(제목 + embed 2개) 삭제
 
 **테스트 코드 규칙**: 테스트는 `GameServer/Test.h`/`Test.cpp`에 함수로 작성하고 `main`에서 호출만 한다. Claude는 테스트 코드를 주지 않고 지시만, 힌트 요청 시에만 코드 조각. **사용자가 "테스트를 작성해 달라"고 요청하면** Claude가 작성하고 Debug/Release 빌드·실행으로 확인한다 (Step 2, 3-1, 3-2는 요청으로 Claude가 작성). 지시할 때는 **테스트 함수 이름과 보조 클래스 이름을 먼저 정해서** 준다. 정상 테스트는 `main`에서 항상 켜 두고, 크래시 테스트(`Crash` 접두사)만 주석으로 둔다. 테스트는 값을 출력만 하지 않고 코드가 비교해서 `OK`/`FAIL`을 낸다.
 
