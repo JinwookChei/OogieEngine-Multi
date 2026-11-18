@@ -17,7 +17,7 @@ description: Docs/Study 학습 정리와 Docs/Diagrams 다이어그램(HTML)을 
 | Phase 0. 환경 준비 | 🛠️ | `4156412b-0acd-81d1-91bd-dc9bb2f0356f` | `Phase0_Setup.md` |
 | Phase 1-1. ServerCore 기반 | 🧱 | `4156412b-0acd-8159-ae6e-e422244bd955` | `Phase1-1_Foundation.md` |
 | Phase 1-2. 동기화 | 🔒 | `4156412b-0acd-81cd-b08f-f440516a0a93` | `Phase1-2_Synchronization.md` |
-| Phase 1-3. 메모리 | 🧠 | `4156412b-0acd-8117-a60e-ec1679c15947` | `Phase1-3_Memory.md` + `Docs/Diagrams/Phase1-3_Memory.html` |
+| Phase 1-3. 메모리 | 🧠 | `4156412b-0acd-8117-a60e-ec1679c15947` | `Phase1-3_Memory.md` + `Docs/Diagrams/Phase1-3_Memory.html`, `Phase1-3_MemoryPool.html` |
 
 - 새 Phase 페이지를 만들면 **이 표에 행을 추가**한다 (ID는 create-pages 결과에서).
 - ID가 맞지 않으면 `notion-search`로 "OogieEngine Server"를 찾아 다시 확인하고 표를 고친다.

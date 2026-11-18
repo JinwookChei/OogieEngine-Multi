@@ -2,6 +2,8 @@
 
 > 💡 **목표**: `new`/`delete`를 직접 감싸서 **할당기를 한 곳에서 교체**할 수 있게 하고, 그 위에 메모리 풀(빠른 재사용)과 Stomp 할당기(Use-After-Free 즉시 검출)를 얹는다.
 
+> 🗺️ 인터랙티브 다이어그램: Docs/Diagrams/Phase1-3_Memory.html — 입구별 할당 경로(Debug/Release), Stomp 페이지 배치 계산기, 크기 → 풀, MemoryPool Push/Pop 직접 조작, Vector 재할당, ObjectPool, 두 MakeShared의 반납 시점
+
 | Step | 파일 | 한 줄 요약 | 상태 |
 |---|---|---|---|
 | 1 | `Allocator.h/.cpp`, `Memory.h` | BaseAllocator + xnew / xdelete (placement new) | ✅ |
@@ -15,6 +17,7 @@
 | 6-2 | `Memory.h` | MakeShared → `std::allocate_shared` + `StlAllocator` (컨트롤 블록 + 객체를 한 번에) | ✅ |
 | 7 | `Container.h`, `CorePch.h` | 컨테이너 별칭 (`Vector`, `Map`, `HashMap`, `Queue`, `String` ...) | ✅ |
 | 8-1 | `ObjectPool.h/.cpp` | ObjectPool (타입 전용 풀, `ObjectPoolBase`로 MemoryPool/Windows.h를 .cpp에 감춤) | ✅ |
+| 8-2 | `ObjectPool.h`, `Memory.h` | ObjectPool::MakeShared (객체는 전용 풀, 삭제자 `Push`, 컨트롤 블록은 `StlAllocator`) | ✅ |
 
 ---
 
@@ -761,6 +764,8 @@ MemoryHeader* MemoryPool::Pop()
 ### 🎯 목표
 크기만 받아서 알맞은 풀을 바로 찾아 할당·해제하는 `Memory`를 만든다. 전역 `GMemory`로 어디서나 쓸 수 있게 한다.
 
+> 🗺️ 인터랙티브 다이어그램: Docs/Diagrams/Phase1-3_MemoryPool.html — Memory와 MemoryPool의 역할 분담, pools_ / poolTable_ 관계, Allocate → Release → 재사용을 한 단계씩 따라가기, 여러 크기 섞어 보기, 생성·소멸 순서
+
 ### 📖 개념 1 — 크기가 곧 번호인 안내표
 `poolTable_`은 **크기가 곧 번호인 사물함 안내표**다. 풀을 반복문으로 찾지 않고 `poolTable_[blockSize]` 한 번으로 찾는다.
 
@@ -1284,10 +1289,16 @@ MakeSharedWeakHoldsBlock — 풀 맨 위 따라가기
 
 ### 🧩 복습 질문
 **Q1. `allocate_shared`로 만든 객체에 `weak_ptr` 하나만 남고 `SharedPtr`는 모두 사라졌다. 소멸자와 메모리 반납은 각각 언제 일어날까? Step 5 방식(`xnew` + 삭제자)이었다면 무엇이 달랐을까?**
-> (미답변) — 테스트 `MakeSharedWeakHoldsBlock`과 개념 3이 답의 대부분을 드러낸다.
+> ❓ 내 답: (해설 요청)
+> 💬 해설: strong 0이면 소멸, weak 0이면 컨트롤 블록이 끝난다. `allocate_shared`는 `[컨트롤 블록 | Knight]`가 **한 블록**이라 strong 0에서 `~Knight()`만 불리고 메모리는 못 돌려준다. weak 0이 되어야 블록 전체가 GMemory 풀로 돌아간다 (`MakeSharedWeakHoldsBlock`). Step 5 방식(`xnew` + `SharedPtr(pObj, xdelete<Type>)`)은 객체와 컨트롤 블록이 **따로**라서, strong 0에서 `xdelete`가 `~Knight()` + Knight 블록을 바로 풀에 돌려주고, OS 힙(기본 `new`)에서 받은 컨트롤 블록만 weak 0까지 남았다가 `delete`된다.
+>
+> 💡 Step 5 방식은 Step 8-2의 "2인자 `SharedPtr(pObj, Push)`"와 같은 구조다. 그래도 `allocate_shared`로 바꾼 이유: 할당 2번 → 1번, 둘 다 우리 할당기, 카운트와 객체가 붙어 캐시에 유리. 대가는 weak가 오래 남으면 객체 메모리까지 묶인다는 것.
 
 **Q2. 이제 `MakeShared`에 `xdelete<Type>` 삭제자가 없다. 그래도 `SharedPtr<Base> p = MakeShared<Knight>();`의 마지막 참조가 사라질 때 `~Knight()`가 불릴까? 누가 그것을 알고 있을까?**
-> (미답변) — `Memory.h`의 `[MakeShared]` 주석이 답을 드러낸다.
+> ❓ 내 답: (해설 요청)
+> 💬 해설: 불린다. `~Base()`가 `virtual`이 아니어도 불린다. 아는 쪽은 **컨트롤 블록**이다. `allocate_shared<Knight>`는 `Knight`를 아는 컨트롤 블록 타입을 만들고, strong 0이 되면 `shared_ptr`는 그 컨트롤 블록의 가상 함수에 소멸을 맡긴다. `SharedPtr<Base>`로 옮겨 담아도 바뀌는 건 겉의 포인터 타입뿐이고 컨트롤 블록은 그대로 공유된다 (타입 소거). Step 5에서는 그 정보가 삭제자 `xdelete<Knight>`였고, 지금은 컨트롤 블록 클래스 자체다.
+>
+> ⚠️ 이 보호는 처음부터 `Knight` 타입으로 만든 `SharedPtr`에만 있다. `Base*`를 `xdelete`하거나, `Base*` 포인터로 `SharedPtr`를 만들거나, `UniquePtr`(컨트롤 블록 없음)를 쓰면 `~Knight()`가 안 불린다 → 다형성 부모의 소멸자는 여전히 `virtual`로 둔다.
 
 **📝 세션 중 질문과 답**
 - `MakeShared`를 쓰면 `StlAllocator`를 쓰게 되나? `StlAllocator`는 STL용 아닌가? → 그렇다. `std::allocate_shared`도 할당기 규약을 받는 표준 라이브러리 함수라 같은 할당기가 꽂힌다. 실제 메모리는 `xnew`, 컨테이너와 같은 `DefaultAllocator`에서 온다 (개념 4).
@@ -1514,3 +1525,93 @@ private:
 **Q2. `MemoryPool`을 헤더 멤버로 두지 않고 `ObjectPoolBase`(.cpp) + 포인터로 감싼 이유는?**
 > ❓ 내 답: 모르겠다.
 > 💬 해설: 템플릿 `ObjectPool<T>`는 헤더에 전부 있어야 하므로, `MemoryPool`을 값 멤버로 두면 `MemoryPool.h`(Windows.h)가 이 헤더를 쓰는 모든 곳(GameServer, 클라이언트 엔진)으로 퍼진다. 포인터는 전방 선언만으로 둘 수 있으니, `MemoryPool`을 실제로 다루는 코드는 템플릿이 아닌 `ObjectPoolBase`의 `.cpp`에 숨긴다 (Pimpl). 창구 직원(`ObjectPoolBase`)만 창고(`MemoryPool`)에 들어가는 구조다.
+
+---
+
+## Step 8-2. ObjectPool용 MakeShared
+
+### 🎯 목표
+`ObjectPool<Type>`에서 꺼낸 객체를 `SharedPtr<Type>`로 감싸서, 마지막 강한 참조가 사라질 때 자동으로 `Push`되게 한다.
+
+### 📖 개념 1 — shared_ptr의 3인자 생성자
+| 인자 | 역할 | 넣은 것 |
+|---|---|---|
+| ① 포인터 | 이미 만들어진 객체 | `Pop(args...)`의 결과 |
+| ② 삭제자 | 강한 참조가 0이 될 때 `delete` 대신 호출 | `Push` (정적 멤버 함수 → 함수 포인터) |
+| ③ 할당기 | 컨트롤 블록(참조 카운트, 삭제자)을 할당 | `StlAllocator<Type>()` (내부 컨트롤 블록 타입으로 rebind) |
+
+> 💡 컨트롤 블록을 할당하다 예외가 나면 생성자가 삭제자(`Push`)를 먼저 불러 준다. 그래서 try/catch 없이도 객체가 새지 않는다.
+
+### 📖 개념 2 — 객체와 컨트롤 블록이 따로 할당된다
+```
+[Memory.h MakeShared — allocate_shared]
+  ┌─────────── 한 덩어리 (DefaultAllocator) ───────────┐
+  │ 컨트롤 블록(strong, weak) │ Type 객체              │
+  └────────────────────────────────────────────────────┘
+
+[ObjectPool::MakeShared — 3인자 생성자]
+  ┌ 컨트롤 블록 (StlAllocator) ┐      ┌ Type 객체 (ObjectPool<Type>) ┐
+  │ strong, weak, 삭제자       │ ───▶ │                              │
+  └────────────────────────────┘      └──────────────────────────────┘
+```
+할당은 2번이지만, 객체 블록과 컨트롤 블록의 수명이 따로 움직인다.
+
+### 📖 개념 3 — 할당기는 불완전 타입으로 인스턴스화될 수 있어야 한다
+3인자 생성자가 만드는 컨트롤 블록(`_Ref_count_resource_alloc`)은 **자기 자신용으로 rebind된 할당기를 멤버로** 가진다. 컨트롤 블록 클래스가 다 만들어지기 전에 `StlAllocator<컨트롤 블록>`이 인스턴스화되므로, 할당기 **클래스 본문**에서 `alignof(Type)`, `sizeof(Type)`을 쓰면 불완전 타입 에러가 난다. 타입이 완전해야 하는 검사는 `allocate()` 같은 **멤버 함수 안**에 둔다 (멤버 함수 본문은 호출될 때 인스턴스화된다).
+
+### 🧱 핵심 코드
+```cpp
+// ObjectPool.h — ObjectPool<Type>
+template<typename... Args>
+static SharedPtr<Type> MakeShared(Args&&... args)
+{
+	// ① 객체는 이 풀에서 받는다
+	Type* pObj = Pop(std::forward<Args>(args)...);
+
+	// ② 삭제자 = Push, 컨트롤 블록은 StlAllocator로 받는다
+	return SharedPtr<Type>(pObj, Push, StlAllocator<Type>());
+}
+```
+```cpp
+// Memory.h — StlAllocator<Type>
+Type* allocate(USize count)
+{
+	// 클래스 본문이 아니라 여기서 검사한다 (컨트롤 블록이 아직 불완전 타입일 수 있음)
+	STATIC_ASSERT(alignof(Type) <= alignof(std::max_align_t), "over-aligned type is not supported");
+	...
+}
+```
+- MakeShared로 받은 객체는 SharedPtr가 관리한다. `get()` 포인터를 직접 `Push`하면 이중 반납이 된다.
+- Release의 `StlAllocator`는 `GMemory`를 쓰므로 `CoreGlobal`이 살아 있는 동안에만 쓴다.
+
+### ⚠️ 겪은 실수
+| 실수 | 결과 | 교훈 |
+|---|---|---|
+| `SharedPtr<Type> Pop(std::forward(args))` (작성 중) | `Pop`이라는 이름의 변수 선언으로 해석, `forward`의 타입 인자와 `...` 누락, `return` 없음 | `Pop` 호출 → `Type*` 지역 변수 → 3인자 SharedPtr 반환, 두 단계로 나눈다 |
+| `StlAllocator` 클래스 본문의 `STATIC_ASSERT(alignof(Type) ...)` (Step 6-1부터 있던 코드) | 3인자 shared_ptr에서 C2139 "정의되지 않은 클래스" | 템플릿은 쓰여야 검사된다. 할당기 본문에서는 `Type`의 완전성을 요구하지 않는다 (Claude가 `allocate()`로 옮김) |
+
+### 🧪 테스트 (`GameServer/Test.cpp`)
+| 함수 | 확인 | 기대 결과 |
+|---|---|---|
+| `ObjectPoolMakeShared` | `use_count` 1 → 2 → 1, 복사본을 놓아도 소멸자 0회, weak_ptr을 남기고 마지막 reset → 소멸자 1회·`expired()` / Release만: 생성 후 useCount 1, weak_ptr이 살아 있어도 useCount 0, 다시 만들면 같은 주소 재사용. 보조 클래스 `MemoryTestKnight` | `OK` (Debug/Release) |
+
+> 📝 2026-11-18: `MakeShared` 본문, `[MakeShared]` 블록 주석, `StlAllocator` 검사 위치 수정, 테스트는 사용자 요청으로 Claude가 작성했다. `Memory.h` include는 사용자가 넣었다.
+
+### 🧩 복습 질문
+**Q1. weak_ptr만 남았을 때 메모리에 남아 있는 것과 이미 돌아간 것은? `Memory.h`의 `MakeShared`였다면?**
+> ❓ 내 답: (해설 요청)
+> 💬 해설: `weak_ptr`는 `expired()`/`lock()`을 할 때 **컨트롤 블록의 strong 카운트**를 읽는다. 그래서 strong 0이면 객체를 치우지만, 컨트롤 블록은 weak 0까지 남아야 한다. `ObjectPool::MakeShared`는 객체와 컨트롤 블록을 **따로** 할당했으므로, strong 0에서 삭제자 `Push`가 `~Knight()`를 부르고 **객체 블록은 바로 전용 풀로 돌아간다** (다음 `Pop`이 같은 주소를 받는다). 남는 것은 **컨트롤 블록뿐**이고, weak 0에서 저장해 둔 `StlAllocator`로 GMemory 풀에 돌아간다. `Memory.h`의 `MakeShared`(`allocate_shared`)는 `[컨트롤 블록 | Knight]`가 **한 블록**이라 strong 0에서 `~Knight()`만 불리고 메모리는 하나도 못 돌려준다. 죽은 Knight 자리까지 weak 0을 기다렸다가 블록 전체가 GMemory 풀로 돌아간다.
+>
+> | weak_ptr만 남았을 때 | Memory.h `MakeShared` | `ObjectPool::MakeShared` |
+> |---|---|---|
+> | `~Knight()` | 불림 | 불림 |
+> | 객체 메모리 | 아직 묶여 있음 | 이미 전용 풀로 |
+> | 컨트롤 블록 | 남음 (객체 자리와 함께) | 남음 (혼자) |
+>
+> 💡 두 방식 모두 **소멸(strong 0)과 메모리 반납(weak 0)이 갈라진다.** 한 덩어리는 객체 메모리까지 weak 0을 기다리고, 따로 할당하면 컨트롤 블록 크기만 남는다. 큰 객체를 `weak_ptr`로 오래 참조하면 이 차이가 커진다. 대신 따로 할당은 할당이 두 번이고 카운트와 객체가 떨어져 있다. 테스트: `ObjectPoolMakeShared` 3~5단계, `MakeSharedWeakHoldsBlock`.
+
+**Q2. 할당기 인자를 빼고 `SharedPtr<Type>(pObj, Push)` 2인자로 만들면 무엇이 달라지나? 왜 3번째 인자를 넣었나?**
+> ❓ 내 답: (해설 요청)
+> 💬 해설: 객체는 이미 `Pop`으로 받았으므로 `SharedPtr` 생성자가 새로 할당하는 것은 **컨트롤 블록**(strong/weak 카운트, 객체 포인터, 삭제자, 할당기 사본)뿐이다. 3번째 인자는 이 컨트롤 블록을 어디서 받을지 정한다. 2인자면 표준 라이브러리가 전역 `new`/`delete`(OS 힙)로 컨트롤 블록을 만들고 지운다 → Debug에서 Stomp 검사를 못 받고, Release에서는 `MakeShared`마다 힙 할당이 한 번씩 생겨 풀의 이점이 절반으로 줄어든다. 3인자면 `StlAllocator<Type>`을 컨트롤 블록 타입으로 rebind해서 `allocate(1)` → `DefaultAllocator`(Stomp 또는 GMemory 풀)로 받고, 컨트롤 블록이 끝날 때는 **자기 안에 저장한 할당기 사본**으로 자신을 `deallocate`한다. 2인자도 동작은 맞다 (객체는 똑같이 `Push`로 전용 풀에 반납, 누수 없음). 차이는 할당 두 번 중 하나가 우리 시스템 밖으로 새는 것이다.
+>
+> 💡 삭제자(2번째 인자) = **객체를 어떻게 치울지**, 할당기(3번째 인자) = **컨트롤 블록을 어디서 받고 돌려줄지**. `<Type>`은 rebind되므로 실제 할당 타입과 달라도 된다. `allocate_shared`를 못 쓰는 이유: 객체와 컨트롤 블록을 한 덩어리로 직접 할당하므로 "객체는 ObjectPool 블록"이라는 조건을 지킬 수 없다.

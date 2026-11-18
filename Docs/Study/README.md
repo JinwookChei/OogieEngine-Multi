@@ -12,7 +12,7 @@
 | 0 | [Phase0_Setup.md](Phase0_Setup.md) | 솔루션 구성, 빌드 설정, PC별 준비물 | ✅ 완료 |
 | 1-1 | [Phase1-1_Foundation.md](Phase1-1_Foundation.md) | Types, CoreMacro, CoreTLS, ThreadManager, CoreGlobal, CorePch | ✅ 완료 |
 | 1-2 | [Phase1-2_Synchronization.md](Phase1-2_Synchronization.md) | Atomic vs Mutex, RW SpinLock, LockGuard, DeadLockProfiler(DFS 사이클 검출) | ✅ 완료 |
-| 1-3 | [Phase1-3_Memory.md](Phase1-3_Memory.md) | 메모리 (Allocator, MemoryPool, ObjectPool) | 🚧 진행 중 |
+| 1-3 | [Phase1-3_Memory.md](Phase1-3_Memory.md) | 할당기(Base/Stomp/Pool/Stl), MemoryPool(SLIST), Memory(크기별 풀 48개), MakeShared, Container 별칭, ObjectPool | ✅ 완료 |
 | 1-4 | — | 네트워크 (IOCP, Session, Service) | ⬜ |
 | 1-5 | — | 버퍼 & 패킷 조립 | ⬜ |
 | 1-6 | — | Job 시스템 | ⬜ |
@@ -22,18 +22,29 @@
 ## 🧭 전체 그림 (현재까지)
 
 ```
-GameServer (exe) ──include──▶ pch.h ──▶ CorePch.h ─┬─ Types.h        (정수/동기화 타입 별칭)
-DummyClient (exe)                                   ├─ CoreMacro.h    (CRASH, ASSERT_CRASH, size32 ...)
+GameServer (exe) ──include──▶ pch.h ──▶ CorePch.h ─┬─ Types.h        (정수/동기화 타입 별칭, SharedPtr)
+DummyClient (exe)                                   ├─ CoreMacro.h    (CRASH, ASSERT_CRASH, STATIC_ASSERT ...)
                                                     ├─ CoreTLS.h      (LThreadId, LLockStack)
-        ServerCore.lib (static) ◀──link──           ├─ CoreGlobal.h   (GThreadManager, GDeadLockProfiler)
+        ServerCore.lib (static) ◀──link──           ├─ CoreGlobal.h   (GThreadManager, GDeadLockProfiler, GMemory)
                                                     ├─ Lock.h         (RW SpinLock, LockGuard, USE_LOCK)
-                                                    └─ Memory.h       (xnew / xdelete → Allocator.h)
+                                                    ├─ Memory.h       (xnew / xdelete, StlAllocator, MakeShared → Allocator.h)
+                                                    └─ Container.h    (Vector, List, Map, HashMap, String ... = StlAllocator 별칭)
+        ObjectPool.h  : 필요한 곳에서 직접 include (타입 전용 풀)
+        MemoryPool.h  : ServerCore 내부 전용 (Windows.h 필요)
 
 main()
  └─ CoreGlobal coreGlobal;   ← 전역 매니저 생성 (소멸은 main 종료 시 역순)
+     ├─ GMemory              ← 가장 먼저 생성, 가장 마지막 소멸 (크기별 MemoryPool 48개 + poolTable_)
      ├─ GThreadManager       ← 스레드 생성/Join, 스레드마다 TLS 초기화
      └─ GDeadLockProfiler    ← (Debug) 락 순서 검사
+
+메모리 할당 경로 (DefaultAllocator = Debug: StompAllocator / Release: PoolAllocator)
+ xnew, MakeShared, Container ──▶ DefaultAllocator ──Release──▶ GMemory ──▶ 크기별 MemoryPool (SLIST)
+                                                  └─Debug────▶ StompAllocator (VirtualAlloc 페이지)
+ ObjectPool<T>::Pop / MakeShared ──▶ T 전용 MemoryPool (Debug는 StompAllocator)
 ```
+
+> 🗺️ 인터랙티브 다이어그램: `Docs/Diagrams/Phase1-3_Memory.html`(메모리 전체), `Docs/Diagrams/Phase1-3_MemoryPool.html`(Memory ↔ MemoryPool)
 
 ---
 

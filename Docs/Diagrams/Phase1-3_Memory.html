@@ -13,15 +13,16 @@
   --ink: #18212b;
   --muted: #5b6876;
   --line: #d3dae2;
-  --header: #0f7b72;      /* MemoryHeader */
+  --header: #0f7b72;      /* MemoryHeader, 풀 안 */
   --header-soft: #d5efec;
-  --data: #2f5fb3;        /* 사용자 데이터 */
+  --data: #2f5fb3;        /* 사용자 데이터, 사용 중 */
   --data-soft: #dce6f8;
   --free: #8a96a3;        /* 비어 있음 / 낭비 */
   --free-soft: #e7ebef;
   --accent: #c26a12;      /* 포인터, 선택 강조 */
   --accent-soft: #f7e6d3;
-  --danger: #b83a3a;
+  --danger: #b83a3a;      /* 크래시, Debug 경로 */
+  --danger-soft: #f6dddd;
   --f-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
   --f-mono: "JetBrains Mono", Consolas, "D2Coding", monospace;
 }
@@ -29,14 +30,14 @@
   :root:not([data-theme="light"]) {
     --bg: #12171d; --surface: #1a2129; --ink: #e4e9ef; --muted: #98a5b3; --line: #2f3a46;
     --header: #3cc2b5; --header-soft: #173a38; --data: #7aa2f0; --data-soft: #1e2c47;
-    --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373;
+    --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373; --danger-soft: #3d2222;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12171d; --surface: #1a2129; --ink: #e4e9ef; --muted: #98a5b3; --line: #2f3a46;
   --header: #3cc2b5; --header-soft: #173a38; --data: #7aa2f0; --data-soft: #1e2c47;
-  --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373;
+  --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373; --danger-soft: #3d2222;
   color-scheme: dark;
 }
 
@@ -57,11 +58,15 @@ body {
 header h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
 header p { margin: 0; color: var(--muted); max-width: 65ch; }
 .eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
-section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+nav.toc { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+nav.toc a { font-size: 12.5px; color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; background: var(--surface); }
+nav.toc a:hover { color: var(--accent); border-color: var(--accent); }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; scroll-margin-top: 16px; }
 h2 { font-size: 20px; margin: 0; text-wrap: balance; }
 h3 { font-size: 15px; margin: 0; }
 p { margin: 0; max-width: 68ch; }
 .muted { color: var(--muted); }
+.small { font-size: 13.5px; }
 code, .mono { font-family: var(--f-mono); font-size: 0.88em; }
 code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
@@ -73,30 +78,54 @@ code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
 .chip.now { color: var(--accent); }
 .chip.next { color: var(--muted); }
 .chip.done { color: var(--header); }
+.chip.dbg { color: var(--danger); }
+button { font: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* ── 1. 호출 경로 ── */
+/* 공통 버튼 그룹 (토글, 조작) */
+.btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btns .lbl { font-size: 12.5px; color: var(--muted); margin-right: 4px; }
+.btns button { font-family: var(--f-mono); font-size: 12.5px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btns button:hover { border-color: var(--accent); color: var(--accent); }
+.btns button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.btns button:disabled { opacity: 0.4; cursor: default; }
+.btns button.warn { border-color: var(--danger); color: var(--danger); }
+.btns .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+
+/* ── 1. 경로 탐색기 ── */
 .flow { display: flex; flex-direction: column; align-items: stretch; gap: 0; min-width: 560px; }
 .node { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 10px 14px; }
-.node .t { font-family: var(--f-mono); font-weight: 600; font-size: 14px; }
+.node .t { font-family: var(--f-mono); font-weight: 600; font-size: 13.5px; }
 .node .d { font-size: 13px; color: var(--muted); }
-.arrow { align-self: center; width: 2px; height: 22px; background: var(--muted); position: relative; }
+.node.debug { border-color: var(--danger); }
+.node.debug .t { color: var(--danger); }
+.node.release { border-color: var(--header); }
+.node.pool .t { color: var(--header); }
+.node.os { border-style: dashed; }
+.node.obj { border-color: var(--data); }
+.node.obj .t { color: var(--data); }
+.arrow { align-self: center; width: 2px; height: 20px; background: var(--muted); position: relative; }
 .arrow::after { content: ""; position: absolute; bottom: -1px; left: -4px; border: 5px solid transparent; border-top: 6px solid var(--muted); border-bottom: 0; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.split .node.debug { border-color: var(--danger); }
-.split .node.release { border-color: var(--header); }
+.lane { display: flex; flex-direction: column; }
 .branchlabel { font-family: var(--f-mono); font-size: 12px; color: var(--muted); text-align: center; padding: 4px 0; }
-.sub { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.sub .node { padding: 8px 10px; }
+.explain { font-size: 13.5px; border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; color: var(--ink); }
+.cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; background: var(--surface); }
+.card .t { font-family: var(--f-mono); font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+.card .w { color: var(--muted); }
 
-/* ── 2. 블록 모양 ── */
+/* ── 블록 모양 / Stomp 띠 ── */
 .strip { display: flex; height: 64px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); min-width: 560px; }
-.cell { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-size: 12px; line-height: 1.3; padding: 0 4px; border-right: 1px solid var(--surface); }
+.cell { display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; font-size: 12px; line-height: 1.3; padding: 0 4px; border-right: 1px solid var(--surface); overflow: hidden; white-space: nowrap; transition: width .2s; }
 .cell b { font-family: var(--f-mono); font-size: 12.5px; }
 .cell.h { background: var(--header-soft); color: var(--header); }
 .cell.d { background: var(--data-soft); color: var(--data); }
 .cell.f { background: repeating-linear-gradient(135deg, var(--free-soft) 0 6px, transparent 6px 12px); color: var(--free); }
+.cell.x { background: var(--danger-soft); color: var(--danger); border-left: 2px dashed var(--danger); }
+.cell.s { background: var(--accent-soft); color: var(--accent); }
 .ruler { display: flex; font-family: var(--f-mono); font-size: 11px; color: var(--muted); min-width: 560px; margin-top: 4px; }
-.ruler span { position: relative; }
+.ruler span { position: relative; white-space: nowrap; }
 /* 띠 위 화살표: 줄마다 하나씩, 띠와 같은 % 위치에 둔다 (폭이 0인 칸에 글자를 넣으면 한 글자씩 세로로 쪼개진다) */
 .pointer { position: relative; height: 20px; font-family: var(--f-mono); font-size: 12px; color: var(--accent); min-width: 560px; }
 .pointer span { position: absolute; top: 0; white-space: nowrap; }
@@ -105,7 +134,7 @@ code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
 .kv dt { font-family: var(--f-mono); color: var(--muted); }
 .kv dd { margin: 0; }
 
-/* ── 3. 크기 → 풀 ── */
+/* ── 입력 → 결과 ── */
 .calc { display: flex; flex-direction: column; gap: 16px; }
 .inputs { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 .inputs label { font-weight: 500; }
@@ -114,7 +143,6 @@ code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
 .presets { display: flex; flex-wrap: wrap; gap: 6px; }
 .presets button { font-family: var(--f-mono); font-size: 12.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
 .presets button:hover { border-color: var(--accent); color: var(--accent); }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .equation { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-family: var(--f-mono); font-size: 15px; }
 .equation .box { padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); white-space: nowrap; }
 .equation .box small { display: block; font-family: var(--f-body); font-size: 11px; color: var(--muted); }
@@ -145,21 +173,28 @@ th { font-size: 12px; color: var(--muted); font-weight: 500; letter-spacing: 0.0
 td.mono, th.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
 tr.dim td { color: var(--muted); }
 
-/* ── 4. SLIST ── */
-.frames { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
-.frame { display: flex; flex-direction: column; gap: 8px; }
-.frame .cap { font-size: 13px; font-weight: 500; }
-.frame .cap span { font-family: var(--f-mono); color: var(--accent); }
+/* ── MemoryPool 샌드박스 ── */
+.sandbox { display: grid; grid-template-columns: 220px 1fr; gap: 18px; }
 .stack { display: flex; flex-direction: column; align-items: flex-start; gap: 0; font-family: var(--f-mono); font-size: 12px; }
 .head { padding: 4px 8px; border-radius: 5px; background: var(--ink); color: var(--bg); }
 .link { margin-left: 16px; color: var(--accent); line-height: 1.1; }
-.blk { padding: 4px 8px; border-radius: 5px; border: 1px solid var(--header); background: var(--header-soft); color: var(--header); }
+.blk { font-family: var(--f-mono); font-size: 12px; padding: 4px 9px; border-radius: 5px; border: 1px solid var(--header); background: var(--header-soft); color: var(--header); transition: background .2s, border-color .2s, color .2s; }
+.blk.used { border-color: var(--data); background: var(--data-soft); color: var(--data); }
+.blk.hot { box-shadow: 0 0 0 2px var(--accent); }
+.blk.dead { border-style: dashed; opacity: .75; }
+.blk.os { border-color: var(--free); background: var(--free-soft); color: var(--muted); }
+button.blk { cursor: pointer; }
+button.blk:hover { border-color: var(--accent); color: var(--accent); }
 .nil { color: var(--muted); padding: 2px 0; }
-.out { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px; }
-.out .blk { border-color: var(--data); background: var(--data-soft); color: var(--data); }
-.counters { font-family: var(--f-mono); font-size: 11.5px; color: var(--muted); border-top: 1px dashed var(--line); padding-top: 6px; }
+.out { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; align-items: center; }
+.counters { font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.counters b { color: var(--ink); }
+.log { font-size: 13.5px; border-radius: 6px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--line); min-height: 2.6em; }
+.log.bad { border-color: var(--danger); background: var(--danger-soft); color: var(--danger); }
+.log.good { border-color: var(--header); }
+.colhead { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 
-/* ── 5. 순서 ── */
+/* ── 순서 ── */
 .steps2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 ol.steps { margin: 0; padding-left: 0; list-style: none; counter-reset: s; display: flex; flex-direction: column; gap: 8px; }
 /* 번호는 왼쪽에 절대 위치로 둔다. li를 grid로 만들면 글자와 <code> 조각이 각각 칸으로 흩어진다 */
@@ -167,15 +202,55 @@ ol.steps li { counter-increment: s; position: relative; padding-left: 34px; font
 ol.steps li::before { content: counter(s); position: absolute; left: 0; top: 1px; font-family: var(--f-mono); font-size: 12px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--free-soft); color: var(--muted); }
 ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent); }
 
-/* ── 6. 소유 ── */
+/* ── Vector 재할당 ── */
+.vecbar { position: relative; height: 34px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: repeating-linear-gradient(135deg, var(--free-soft) 0 6px, transparent 6px 12px); min-width: 300px; }
+.vecbar i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--data-soft); border-right: 2px solid var(--data); transition: width .2s; }
+.vecbar span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-family: var(--f-mono); font-size: 12.5px; color: var(--ink); white-space: nowrap; }
+.events td.new { color: var(--data); }
+.events td.old { color: var(--header); }
+.events td.big { color: var(--accent); }
+
+/* ── MakeShared 단계 재생기 ── */
+.gate { display: flex; flex-direction: column; gap: 10px; align-items: flex-start; border: 1px dashed var(--accent); background: var(--accent-soft); border-radius: 10px; padding: 16px 18px; }
+.gate p { font-size: 14px; }
+.stepper { display: flex; flex-direction: column; gap: 14px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.controls button { font-family: var(--f-mono); font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.controls button:hover { border-color: var(--accent); color: var(--accent); }
+.controls button:disabled { opacity: 0.4; cursor: default; }
+.controls button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.controls .pos { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.caption { font-size: 14px; min-height: 2.6em; }
+.caption b { color: var(--accent); }
+.caption code { font-size: 0.86em; }
+.places { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.place { border: 1px solid var(--line); border-radius: 8px; padding: 10px; min-height: 120px; display: flex; flex-direction: column; gap: 8px; }
+.place.off { opacity: .45; border-style: dashed; }
+.place .pt { font-size: 12.5px; font-weight: 600; }
+.place .pd { font-size: 11.5px; color: var(--muted); line-height: 1.4; }
+.place .items { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.mblk { font-family: var(--f-mono); font-size: 11.5px; border-radius: 6px; border: 1px solid var(--data); background: var(--data-soft); color: var(--data); overflow: hidden; display: flex; flex-direction: column; max-width: 100%; }
+.mblk > div { padding: 3px 8px; }
+.mblk .cb { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); color: var(--accent); border-bottom: 1px solid var(--line); }
+.mblk.home { border-color: var(--header); background: var(--header-soft); color: var(--header); }
+.mblk.home .cb { background: transparent; color: var(--header); }
+.mblk.gone { border-color: var(--free); background: var(--free-soft); color: var(--muted); }
+.mblk.gone .cb { background: transparent; color: var(--muted); }
+.mblk .zombie { text-decoration: line-through; opacity: .7; }
+.mblk.hot { box-shadow: 0 0 0 2px var(--accent); }
+.refs { display: flex; flex-wrap: wrap; gap: 6px 18px; font-family: var(--f-mono); font-size: 12.5px; color: var(--muted); }
+.refs b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.refs .yes { color: var(--danger); }
+
+/* ── 소유 ── */
 .tree { font-family: var(--f-mono); font-size: 13px; line-height: 1.9; white-space: pre; margin: 0; }
 .tree .c { color: var(--muted); }
 .tree .k { color: var(--header); font-weight: 600; }
 .tree .a { color: var(--accent); }
 
 @media (max-width: 720px) {
-  .split, .sub, .states, .steps2 { grid-template-columns: 1fr; }
-  .frames { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .split, .states, .steps2, .sandbox { grid-template-columns: 1fr; }
+  .cards, .places { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   header h1 { font-size: 25px; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
@@ -187,56 +262,81 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
 <header>
   <div class="eyebrow">OogieEngine Server · Phase 1-3</div>
   <h1>ServerCore 메모리 구조</h1>
-  <p><code>xnew</code> 한 줄이 실제로 어떤 메모리를 받아 오는지, 블록 하나가 어떻게 생겼고 풀 안에서 어떻게 돌아다니는지를 그림으로 정리했다. Step 4-2(PoolAllocator)까지 모두 <span class="chip done">완료</span>된 상태다.</p>
+  <p><code>xnew</code>, <code>MakeShared</code>, <code>Vector</code>, <code>ObjectPool</code>이 각각 어느 할당기를 거쳐 어떤 메모리를 받는지, 블록이 풀 안팎을 어떻게 오가는지를 직접 눌러 보며 확인한다. Step 1(BaseAllocator)부터 Step 8-2(ObjectPool::MakeShared)까지 모두 <span class="chip done">완료</span>된 상태다.</p>
+  <nav class="toc" aria-label="목차">
+    <a href="#s1">1. 입구별 경로</a><a href="#s2">2. StompAllocator 페이지</a><a href="#s3">3. 블록 모양</a><a href="#s4">4. 크기 → 풀</a>
+    <a href="#s5">5. MemoryPool 직접 조작</a><a href="#s6">6. Allocate/Release 순서</a><a href="#s7">7. Vector와 StlAllocator</a>
+    <a href="#s8">8. ObjectPool</a><a href="#s9">9. 두 MakeShared</a><a href="#s10">10. 소유와 수명</a><a href="#s11">11. Debug vs Release</a>
+  </nav>
 </header>
 
 <!-- 1 -->
-<section>
-  <h2>1. xnew에서 실제 메모리까지</h2>
-  <p class="muted">할당기는 <code>DefaultAllocator</code> 별칭 한 곳에서 빌드 구성별로 고른다. Release 경로는 Step 4에서 만들었다.</p>
-  <div class="panel scroll">
-    <div class="flow">
-      <div class="node"><div class="t">xnew&lt;Knight&gt;(args...)</div><div class="d">① 메모리 확보 → ② placement new로 생성자 호출 <span class="chip done">완료</span></div></div>
-      <div class="arrow"></div>
-      <div class="node"><div class="t">DefaultAllocator::Alloc(sizeof(Knight))</div><div class="d">Memory.h의 <code>#ifdef _DEBUG</code>가 아래 둘 중 하나로 정한다</div></div>
-      <div class="arrow"></div>
-      <div class="split">
-        <div>
-          <div class="branchlabel">Debug</div>
-          <div class="node debug">
-            <div class="t">StompAllocator <span class="chip done">완료</span></div>
-            <div class="d">객체마다 VirtualAlloc 페이지. 데이터 끝을 페이지 끝에 붙여서 해제 후 접근, 오버플로를 그 줄에서 크래시로 잡는다. 느리다.</div>
-          </div>
-        </div>
-        <div>
-          <div class="branchlabel">Release</div>
-          <div class="node release">
-            <div class="t">PoolAllocator <span class="chip done">Step 4-2 완료</span></div>
-            <div class="d">아래 <code>GMemory</code>에 그대로 위임하는 얇은 껍데기. <code>Release(nullptr)</code>는 여기서 아무것도 하지 않고 돌아간다</div>
-          </div>
-          <div class="arrow"></div>
-          <div class="node release">
-            <div class="t">GMemory-&gt;Allocate(size) <span class="chip done">Step 4-1 완료</span></div>
-            <div class="d">blockSize = size + 16 (헤더)</div>
-            <div class="sub">
-              <div class="node"><div class="t" style="font-size:12.5px">blockSize ≤ 4096</div><div class="d">poolTable_[blockSize]-&gt;Pop()</div></div>
-              <div class="node"><div class="t" style="font-size:12.5px">blockSize &gt; 4096</div><div class="d">_aligned_malloc 직행</div></div>
-            </div>
-          </div>
-          <div class="arrow"></div>
-          <div class="node release">
-            <div class="t">AttachHeader(block, blockSize)</div>
-            <div class="d">헤더에 크기를 적고 <code>header + 1</code>(16바이트 뒤)을 돌려준다</div>
-          </div>
-        </div>
-      </div>
+<section id="s1">
+  <h2>1. 입구별 경로: 누가 누구를 부르나</h2>
+  <p class="muted">입구 함수와 빌드 구성을 고르면 메모리가 실제로 나오는 곳까지의 호출 경로가 그려진다. 할당기는 <code>Memory.h</code>의 <code>DefaultAllocator</code> 별칭 한 곳에서 빌드 구성별로 바뀐다.</p>
+  <div class="cards">
+    <div class="card"><div class="t">BaseAllocator</div><div class="w">malloc / free 그대로. 기준점 <span class="chip done">Step 1</span></div></div>
+    <div class="card"><div class="t">StompAllocator</div><div class="w">객체마다 VirtualAlloc 페이지. 버그 탐지 <span class="chip dbg">Debug</span></div></div>
+    <div class="card"><div class="t">PoolAllocator</div><div class="w">GMemory에 위임하는 껍데기 <span class="chip done">Release</span></div></div>
+    <div class="card"><div class="t">StlAllocator&lt;T&gt;</div><div class="w">STL 규약 어댑터. 안에서 DefaultAllocator 호출</div></div>
+  </div>
+  <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+    <div class="btns" role="group" aria-label="입구 함수">
+      <span class="lbl">입구</span>
+      <button type="button" data-entry="xnew" aria-pressed="true">xnew&lt;Knight&gt;</button>
+      <button type="button" data-entry="make" aria-pressed="false">MakeShared&lt;Knight&gt;</button>
+      <button type="button" data-entry="vec" aria-pressed="false">Vector&lt;Int32&gt;::push_back</button>
+      <button type="button" data-entry="op" aria-pressed="false">ObjectPool::Pop</button>
+      <button type="button" data-entry="opms" aria-pressed="false">ObjectPool::MakeShared</button>
     </div>
+    <div class="btns" role="group" aria-label="빌드 구성">
+      <span class="lbl">빌드</span>
+      <button type="button" data-build="release" aria-pressed="true">Release</button>
+      <button type="button" data-build="debug" aria-pressed="false">Debug</button>
+    </div>
+    <div class="scroll"><div class="flow" id="pathFlow"></div></div>
+    <div class="explain" id="pathNote"></div>
   </div>
 </section>
 
 <!-- 2 -->
-<section>
-  <h2>2. 블록 한 개의 모양</h2>
+<section id="s2">
+  <h2>2. StompAllocator: 데이터를 페이지 끝에 붙인다</h2>
+  <p class="muted">Debug의 모든 할당은 여기로 온다. 크기를 바꿔 보면 <code>alignedSize</code>, <code>totalSize</code>, <code>offset</code>이 <code>Allocator.cpp</code>와 같은 식으로 계산되고, 페이지 안에서 데이터가 어디에 놓이는지 보인다.</p>
+  <div class="panel calc">
+    <div class="inputs">
+      <label for="stompReq">요청 크기</label>
+      <input id="stompReq" type="number" min="1" max="20000" value="100">
+      <input id="stompRange" type="range" min="1" max="9000" value="100" aria-label="Stomp 요청 크기 슬라이더">
+    </div>
+    <div class="presets" role="group" aria-label="Stomp 예시 크기">
+      <button type="button" data-sv="1">1</button>
+      <button type="button" data-sv="16">16</button>
+      <button type="button" data-sv="100">100</button>
+      <button type="button" data-sv="4000">4000</button>
+      <button type="button" data-sv="4096">4096</button>
+      <button type="button" data-sv="4097">4097</button>
+      <button type="button" data-sv="8000">8000</button>
+    </div>
+    <div class="equation" id="stompEq"></div>
+    <div class="legend">
+      <span style="--c: var(--free)">앞쪽 빈 공간 (offset, 커밋됨)</span>
+      <span style="--c: var(--data)">사용자 데이터</span>
+      <span style="--c: var(--accent)">올림 여분 (넘쳐도 못 잡음)</span>
+      <span style="--c: var(--danger)">커밋 안 된 주소 → 접근하면 AV</span>
+    </div>
+    <div class="scroll">
+      <div class="pointer" id="stompPtr"></div>
+      <div class="strip" id="stompStrip"></div>
+      <div class="ruler" id="stompRuler"></div>
+    </div>
+    <div class="waste" id="stompNote"></div>
+  </div>
+</section>
+
+<!-- 3 -->
+<section id="s3">
+  <h2>3. 블록 한 개의 모양 (Release)</h2>
   <p class="muted">풀이 다루는 단위는 "헤더 + 데이터" 묶음인 블록이다. 예시는 <code>Allocate(100)</code>: 블록 크기 116을 128 풀이 맡는다.</p>
   <div class="panel">
     <div class="legend" style="margin-bottom:12px">
@@ -274,14 +374,14 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
         </dl>
       </div>
     </div>
-    <p class="muted" style="margin-top:14px;font-size:13.5px"><code>sizeof(MemoryHeader) == 16</code>은 테스트 출력으로 확인한 값이다. 헤더가 16의 배수라서, 블록 시작이 16 정렬이면 사용자 주소도 16 정렬이다.</p>
+    <p class="muted small" style="margin-top:14px"><code>sizeof(MemoryHeader) == 16</code>은 테스트 출력으로 확인한 값이다. 헤더가 16의 배수라서(<code>STATIC_ASSERT</code>로 검사), 블록 시작이 16 정렬이면 사용자 주소도 16 정렬이다.</p>
   </div>
 </section>
 
-<!-- 3 -->
-<section>
-  <h2>3. 요청 크기 → 어느 풀?</h2>
-  <p class="muted">풀은 48개. 블록 크기가 작을수록 간격을 촘촘하게 잡는다. 크기를 바꿔 보면 어떤 풀이 고르는지, 몇 바이트가 남는지 보인다.</p>
+<!-- 4 -->
+<section id="s4">
+  <h2>4. 요청 크기 → 어느 풀?</h2>
+  <p class="muted">GMemory의 풀은 48개. 블록 크기가 작을수록 간격을 촘촘하게 잡는다. 크기를 바꿔 보면 어떤 풀이 고르는지, 몇 바이트가 남는지 보인다.</p>
   <div class="panel calc">
     <div class="inputs">
       <label for="req">요청 크기</label>
@@ -317,7 +417,7 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
 
   <div class="panel scroll">
     <h3 style="margin-bottom:8px">poolTable_[4097]: 인덱스 = 블록 크기</h3>
-    <p class="muted" style="font-size:13.5px;margin-bottom:10px">생성자에서 한 번 채우고 이후 읽기만 한다 → 여러 스레드가 락 없이 읽어도 안전하다. 조회는 배열 한 칸 읽기라서 O(1).</p>
+    <p class="muted small" style="margin-bottom:10px">생성자에서 한 번 채우고 이후 읽기만 한다 → 여러 스레드가 락 없이 읽어도 안전하다. 조회는 배열 한 칸 읽기라서 O(1).</p>
     <table>
       <thead><tr><th class="mono">인덱스 (블록 크기)</th><th>가리키는 풀</th><th>비고</th></tr></thead>
       <tbody>
@@ -337,53 +437,49 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
   </div>
 </section>
 
-<!-- 4 -->
-<section>
-  <h2>4. MemoryPool 하나의 안쪽 (128 풀)</h2>
-  <p class="muted"><code>SLIST_HEADER</code>는 빈 블록 스택의 꼭대기를 가리킨다. Push와 Pop은 모두 꼭대기에서 일어난다 (LIFO). 방금 돌려받은 블록이 다음 Pop에서 바로 나가므로 CPU 캐시에 남아 있을 가능성이 높다.</p>
-  <div class="panel">
-    <div class="legend" style="margin-bottom:12px">
+<!-- 5 -->
+<section id="s5">
+  <h2>5. MemoryPool 하나를 직접 조작해 보기 (128 풀)</h2>
+  <p class="muted">버튼으로 <code>Pop</code>과 <code>Push</code>를 해 본다. 빌려준 블록을 누르면 그 블록이 Push된다. <code>SLIST_HEADER</code>는 빈 블록 스택의 꼭대기를 가리키고, Push와 Pop은 모두 꼭대기에서 일어난다 (LIFO).</p>
+  <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+    <div class="legend">
       <span style="--c: var(--header)">풀 안 (allocSize_ = 0)</span>
       <span style="--c: var(--data)">빌려준 블록 (allocSize_ = 블록 크기)</span>
+      <span style="--c: var(--accent)">방금 움직인 블록</span>
     </div>
-    <div class="frames">
-      <div class="frame">
-        <div class="cap">처음</div>
-        <div class="stack"><div class="head">header_</div><div class="link">↓</div><div class="nil">nullptr</div></div>
-        <div class="out"></div>
-        <div class="counters">use 0 · reserve 0</div>
+    <div class="btns" role="group" aria-label="MemoryPool 조작">
+      <button type="button" id="mpPop">Pop()</button>
+      <button type="button" id="mpPushLast">Push(마지막에 빌린 블록)</button>
+      <button type="button" id="mpDouble" class="warn">이미 풀에 있는 블록을 또 Push</button>
+      <span class="sep"></span>
+      <button type="button" id="mpReset">⟲ 처음</button>
+    </div>
+    <div class="sandbox">
+      <div>
+        <div class="colhead">풀 안 (header_부터 Next를 따라감)</div>
+        <div class="stack" id="mpStack"></div>
       </div>
-      <div class="frame">
-        <div class="cap"><span>Pop</span> 2번</div>
-        <div class="stack"><div class="head">header_</div><div class="link">↓</div><div class="nil">nullptr</div></div>
-        <div class="out"><div class="blk">A</div><div class="blk">B</div></div>
-        <div class="counters">use 2 · reserve 0<br>풀이 비어서 _aligned_malloc 2번</div>
-      </div>
-      <div class="frame">
-        <div class="cap"><span>Push</span> A, B</div>
-        <div class="stack"><div class="head">header_</div><div class="link">↓</div><div class="blk">B</div><div class="link">↓ Next</div><div class="blk">A</div><div class="link">↓ Next</div><div class="nil">nullptr</div></div>
-        <div class="out"></div>
-        <div class="counters">use 0 · reserve 2<br>해제하지 않고 보관</div>
-      </div>
-      <div class="frame">
-        <div class="cap"><span>Pop</span> 1번</div>
-        <div class="stack"><div class="head">header_</div><div class="link">↓</div><div class="blk">A</div><div class="link">↓ Next</div><div class="nil">nullptr</div></div>
-        <div class="out"><div class="blk">B</div></div>
-        <div class="counters">use 1 · reserve 1<br>B 재사용, 새 할당 없음</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        <div>
+          <div class="colhead">밖에 빌려준 블록 (눌러서 Push)</div>
+          <div class="out" id="mpOut"></div>
+        </div>
+        <div class="counters" id="mpCnt"></div>
+        <div class="log" id="mpLog" aria-live="polite"></div>
       </div>
     </div>
-    <p class="muted" style="margin-top:14px;font-size:13.5px">header_는 꼭대기 주소와 순번을 16바이트 하나로 묶어 원자적으로 비교교환한다. 순번이 ABA 문제를 막고, 그래서 여러 스레드가 락 없이 동시에 Push/Pop 할 수 있다.</p>
+    <p class="muted small">header_는 꼭대기 주소와 순번을 16바이트 하나로 묶어 원자적으로 비교교환한다. 순번이 ABA 문제를 막고, 그래서 여러 스레드가 락 없이 동시에 Push/Pop 할 수 있다. 방금 돌려받은 블록이 다음 Pop에서 바로 나가므로 CPU 캐시에 남아 있을 가능성이 높다.</p>
   </div>
 </section>
 
-<!-- 5 -->
-<section>
-  <h2>5. Allocate와 Release 순서</h2>
+<!-- 6 -->
+<section id="s6">
+  <h2>6. Allocate와 Release 순서</h2>
   <div class="steps2">
     <div class="panel">
-      <h3 style="margin-bottom:10px"><code>Allocate(size)</code></h3>
+      <h3 style="margin-bottom:10px"><code>Memory::Allocate(size)</code></h3>
       <ol class="steps">
-        <li>size 범위 검사 (0 이하, int32 넘침 → 크래시)</li>
+        <li>size 범위 검사 (0 이하, Int32 넘침 → 크래시)</li>
         <li>blockSize = size + 16</li>
         <li class="branch">4096 이하 → <code>poolTable_[blockSize]-&gt;Pop()</code><br>초과 → <code>_aligned_malloc(blockSize, 16)</code></li>
         <li><code>AttachHeader</code>: 헤더 생성, allocSize_ = blockSize</li>
@@ -391,7 +487,7 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
       </ol>
     </div>
     <div class="panel">
-      <h3 style="margin-bottom:10px"><code>Release(ptr)</code></h3>
+      <h3 style="margin-bottom:10px"><code>Memory::Release(ptr)</code></h3>
       <ol class="steps">
         <li>nullptr이면 크래시 (<code>ASSERT_CRASH</code>). <code>xdelete(nullptr)</code>은 그 전에 <code>PoolAllocator::Release</code>가 걸러 낸다</li>
         <li><code>DetachHeader</code>: ptr − 16 = 헤더</li>
@@ -402,9 +498,87 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
   </div>
 </section>
 
-<!-- 6 -->
-<section>
-  <h2>6. 누가 무엇을 갖고, 언제 사라지나</h2>
+<!-- 7 -->
+<section id="s7">
+  <h2>7. Vector와 StlAllocator: 재할당마다 풀이 바뀐다</h2>
+  <p class="muted"><code>Vector&lt;Int32&gt;</code>는 <code>std::vector&lt;Int32, StlAllocator&lt;Int32&gt;&gt;</code>다. 공간이 모자라면 vector가 <code>allocate(새 용량)</code>으로 더 큰 블록을 받고, 원소를 옮긴 뒤 옛 블록을 <code>deallocate</code>한다. <code>push_back</code>을 눌러 Release 빌드에서 어느 풀을 오가는지 본다.</p>
+  <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+    <div class="btns" role="group" aria-label="Vector 조작">
+      <button type="button" id="vecPush1">push_back</button>
+      <button type="button" id="vecPush10">push_back × 10</button>
+      <button type="button" id="vecGrow">다음 재할당까지</button>
+      <span class="sep"></span>
+      <button type="button" id="vecReset">⟲ 처음</button>
+    </div>
+    <div class="vecbar"><i id="vecFill"></i><span id="vecText"></span></div>
+    <div class="scroll">
+      <table class="events">
+        <thead><tr><th class="mono">push_back</th><th class="mono">용량</th><th>allocate(새 용량)</th><th>deallocate(옛 블록)</th></tr></thead>
+        <tbody id="vecLog"></tbody>
+      </table>
+    </div>
+    <p class="muted small">새 용량은 MSVC STL 규칙(옛 용량 + 옛 용량/2, 모자라면 필요한 만큼)으로 계산했다. 바이트 수 = 용량 × <code>sizeof(Int32)</code>(4). 용량이 1066이 되는 순간 블록이 4096을 넘어 풀을 거치지 않는다. 미리 <code>reserve</code>하면 이 재할당이 한 번으로 줄어든다. Debug 빌드는 같은 호출이 모두 StompAllocator로 가고, MSVC가 반복자 검사용 작은 객체를 따로 하나 더 할당한다.</p>
+  </div>
+</section>
+
+<!-- 8 -->
+<section id="s8">
+  <h2>8. ObjectPool: 타입 하나에 전용 풀 하나</h2>
+  <p class="muted"><code>ObjectPool&lt;Type&gt;</code>은 <code>GMemory</code>의 공용 풀을 쓰지 않는다. 타입마다 함수 안 static <code>ObjectPoolBase SBase</code>가 하나씩 생기고, 그 안에 블록 크기가 <code>sizeof(Type) + 16</code>으로 딱 맞는 <code>MemoryPool</code>을 하나 갖는다.</p>
+  <div class="panel scroll">
+    <table>
+      <thead><tr><th></th><th>GMemory (xnew, MakeShared, STL)</th><th>ObjectPool&lt;Type&gt;</th></tr></thead>
+      <tbody>
+        <tr><td>풀 개수</td><td>48개를 모든 타입이 같이 쓴다</td><td>타입마다 1개 (<code>ObjectPool&lt;Knight&gt;</code>, <code>ObjectPool&lt;Monster&gt;</code>는 다른 <code>SBase</code>)</td></tr>
+        <tr><td>블록 크기</td><td>32/128/256 간격으로 올림 → 남는 칸 생김</td><td><code>sizeof(Type) + 16</code> 그대로 → 남는 칸 없음</td></tr>
+        <tr><td>풀 찾기</td><td><code>poolTable_[blockSize]</code> 조회</td><td>조회 없음. 컴파일 시점에 타입으로 정해짐</td></tr>
+        <tr><td>사용량 보기</td><td>크기별로 섞여서 타입별로 셀 수 없음</td><td><code>GetUseCount()</code> = 이 타입 객체가 지금 몇 개 밖에 있나 (Release만)</td></tr>
+        <tr><td>헤더 포함 이유</td><td>Release가 크기를 몰라서 allocSize_로 풀을 찾음</td><td>풀은 이미 알지만 SLIST 노드 자리와 이중 해제 검사(allocSize_ = 0)가 필요</td></tr>
+        <tr><td>Debug</td><td colspan="2">둘 다 StompAllocator로 간다. ObjectPool은 <code>#ifdef _DEBUG</code>로 Pop/Push 안에서 직접 분기한다</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="muted small"><code>MemoryPool</code>은 <code>Windows.h</code>가 필요한 내부 전용 타입이다. 그래서 템플릿 <code>ObjectPool&lt;Type&gt;</code>(헤더에 전부 있음)은 <code>MemoryPool</code>을 모르고, 템플릿이 아닌 <code>ObjectPoolBase</code>가 <code>MemoryPool*</code>을 들고 <code>.cpp</code>에서만 다룬다.</p>
+</section>
+
+<!-- 9 -->
+<section id="s9">
+  <h2>9. 두 MakeShared: 객체와 컨트롤 블록은 어디로 돌아가나</h2>
+  <p class="muted"><code>shared_ptr</code>는 객체 말고도 참조 카운트를 담은 <b>컨트롤 블록</b>이 필요하다. 두 MakeShared는 이 두 덩어리를 받는 곳과 돌려주는 시점이 다르다. Release 빌드 기준이다 (Debug는 모든 블록이 StompAllocator로 간다).</p>
+  <div class="gate" id="msGate">
+    <p>⚠️ 이 섹션은 <b>아직 답하지 않은 확인 질문</b>의 답을 그대로 보여 준다: Step 6-2 Q1(weak_ptr만 남았을 때 메모리 반납 시점), Step 8-2 Q1(남은 것과 돌아간 것), Step 8-2 Q2(할당기 인자를 뺀 2인자 버전). 먼저 답해 보고 확인용으로 여는 것을 권한다.</p>
+    <div class="btns"><button type="button" id="msOpen">답을 알고 보기 (열기)</button></div>
+  </div>
+  <div class="panel stepper" id="msBody" hidden>
+    <div class="btns" role="group" aria-label="MakeShared 종류">
+      <span class="lbl">방식</span>
+      <button type="button" data-mode="mem" aria-pressed="true">Memory.h MakeShared</button>
+      <button type="button" data-mode="op3" aria-pressed="false">ObjectPool::MakeShared (3인자)</button>
+      <button type="button" data-mode="op2" aria-pressed="false">만약 2인자였다면</button>
+    </div>
+    <div class="controls">
+      <button type="button" data-act="first" aria-label="처음으로">⟲ 처음</button>
+      <button type="button" data-act="prev" aria-label="이전 단계">◀ 이전</button>
+      <button type="button" data-act="next" aria-label="다음 단계">다음 ▶</button>
+      <button type="button" data-act="play" aria-pressed="false">⏯ 자동</button>
+      <span class="pos" data-role="pos"></span>
+    </div>
+    <div class="caption" data-role="caption" aria-live="polite"></div>
+    <div class="refs" id="msRefs"></div>
+    <div class="places" id="msPlaces"></div>
+    <div class="legend">
+      <span style="--c: var(--accent)">컨트롤 블록 (strong/weak 카운트)</span>
+      <span style="--c: var(--data)">사용 중</span>
+      <span style="--c: var(--header)">풀에 돌아가 재사용 대기</span>
+      <span style="--c: var(--free)">OS 힙에 반환</span>
+    </div>
+    <div class="explain" id="msNote"></div>
+  </div>
+</section>
+
+<!-- 10 -->
+<section id="s10">
+  <h2>10. 누가 무엇을 갖고, 언제 사라지나</h2>
   <div class="panel scroll">
 <pre class="tree"><span class="k">main()</span>
  └ CoreGlobal (지역 객체)            <span class="c">// 생성: GMemory 가장 먼저 / 소멸: GMemory 가장 마지막</span>
@@ -416,13 +590,18 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
        │     └ SLIST: 쉬는 블록들      <span class="c">// ~MemoryPool()이 _aligned_free</span>
        └ poolTable_[4097]             <span class="c">// pools_를 가리키기만 함 (소유 X)</span>
 
-<span class="a">빌려준 블록</span>                        <span class="c">// 풀은 모른다. Release되지 않으면 종료 시 누수</span></pre>
+<span class="k">ObjectPool&lt;Knight&gt;::GetBase()</span>
+ └ static ObjectPoolBase SBase       <span class="c">// 처음 호출될 때 생성(스레드 안전), 프로그램 종료 때 소멸</span>
+    └ pPool_ : MemoryPool*           <span class="c">// new로 생성, ~ObjectPoolBase()에서 delete</span>
+       └ SLIST: 쉬는 Knight 블록들
+
+<span class="a">빌려준 블록</span>                        <span class="c">// 풀은 모른다. Release/Push되지 않으면 종료 시 누수</span></pre>
   </div>
 </section>
 
-<!-- 7 -->
-<section>
-  <h2>7. Debug와 Release가 다른 이유</h2>
+<!-- 11 -->
+<section id="s11">
+  <h2>11. Debug와 Release가 다른 이유</h2>
   <div class="panel scroll">
     <table>
       <thead><tr><th></th><th>Debug · StompAllocator</th><th>Release · PoolAllocator → Memory</th></tr></thead>
@@ -434,6 +613,7 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
         <tr><td>뒤로 넘침</td><td>정렬 여분을 넘으면 즉시 크래시</td><td>옆 블록의 헤더/데이터를 덮음</td></tr>
         <tr><td>이중 해제</td><td>VirtualFree 실패 → ASSERT</td><td>allocSize_ == 0 검사로 일부 검출</td></tr>
         <tr><td>비용</td><td>할당마다 시스템 콜</td><td>대부분 SLIST 원자 연산 하나</td></tr>
+        <tr><td>재사용 테스트</td><td>SKIP (페이지를 매번 새로 받음)</td><td>같은 주소가 다시 나오는지 검사</td></tr>
       </tbody>
     </table>
   </div>
@@ -444,17 +624,205 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
 <script>
 (function () {
   var HEADER = 16, MAX = 4096;
+
+  /* ── 공통: GMemory의 48개 풀 (Memory::Memory()와 같은 반복문) ── */
   var pools = [];
   for (var s = 32; s <= 1024; s += 32) pools.push(s);
-  for (s = 1024 + 128; s <= 2048; s += 128) pools.push(s);
-  for (s = 2048 + 256; s <= MAX; s += 256) pools.push(s);
+  for (s = 1152; s <= 2048; s += 128) pools.push(s);
+  for (s = 2304; s <= MAX; s += 256) pools.push(s);
+  function poolOf(block) {
+    if (block > MAX) return -1;
+    for (var i = 0; i < pools.length; i++) if (block <= pools[i]) return pools[i];
+    return -1;
+  }
+  function pressGroup(buttons, active) {
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', b === active ? 'true' : 'false'); });
+  }
+  function hashParam(name) {
+    var m = new RegExp('[#&]' + name + '=([^&]+)').exec(location.hash);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
 
-  // 막대 그리기: 크기 범위 0~4096을 90%, 초과를 10%로
+  /* ── 1. 경로 탐색기 ── */
+  var PATHS = {
+    xnew: {
+      release: [
+        { t: 'xnew<Knight>(args...)', d: '① 메모리 확보 → ② placement new로 생성자 호출' },
+        { t: 'PoolAllocator::Alloc(sizeof(Knight))', d: 'DefaultAllocator = PoolAllocator. GMemory에 그대로 넘긴다', c: 'release' },
+        { t: 'GMemory->Allocate(size)', d: 'blockSize = size + 16 → poolTable_[blockSize]->Pop() (4096 초과면 _aligned_malloc)', c: 'release pool' },
+        { t: 'AttachHeader → header + 1', d: '헤더에 allocSize_를 적고 16바이트 뒤 주소를 돌려준다', c: 'release' },
+        { t: 'new(pMemory) Knight(args...)', d: '받은 자리에서 생성자만 호출', c: 'obj' }
+      ],
+      debug: [
+        { t: 'xnew<Knight>(args...)', d: '① 메모리 확보 → ② placement new로 생성자 호출' },
+        { t: 'StompAllocator::Alloc(sizeof(Knight))', d: 'DefaultAllocator = StompAllocator', c: 'debug' },
+        { t: 'VirtualAlloc(totalSize)', d: '객체마다 새 페이지. 데이터 끝을 페이지 끝에 붙인 주소를 돌려준다 (2번 섹션)', c: 'debug os' },
+        { t: 'new(pMemory) Knight(args...)', d: '받은 자리에서 생성자만 호출', c: 'obj' }
+      ],
+      note: '해제는 <code>xdelete</code>: 소멸자를 직접 호출한 뒤 같은 <code>DefaultAllocator::Release</code>로 돌려준다. 할당한 곳으로 돌려줘야 하므로 Alloc과 Release는 항상 짝이 같은 할당기다.'
+    },
+    make: {
+      release: [
+        { t: 'MakeShared<Knight>(args...)', d: 'std::allocate_shared<Knight>(StlAllocator<Knight>(), args...)' },
+        { t: 'StlAllocator<묶음>::allocate(1)', d: 'allocate_shared가 할당기를 "컨트롤 블록 + Knight" 묶음 타입으로 바꿔(rebind) 한 번만 부른다', c: 'release' },
+        { t: 'PoolAllocator::Alloc(sizeof(묶음))', d: '크기 계산 후 DefaultAllocator 호출', c: 'release' },
+        { t: 'GMemory->Allocate(size)', d: '묶음 크기 + 16에 맞는 공용 풀에서 Pop', c: 'release pool' },
+        { t: '[컨트롤 블록 | Knight] 한 덩어리', d: '블록 하나 안에 카운트와 객체가 같이 생성된다', c: 'obj' }
+      ],
+      debug: [
+        { t: 'MakeShared<Knight>(args...)', d: 'std::allocate_shared<Knight>(StlAllocator<Knight>(), args...)' },
+        { t: 'StlAllocator<묶음>::allocate(1)', d: '"컨트롤 블록 + Knight" 묶음 하나를 요청', c: 'debug' },
+        { t: 'StompAllocator::Alloc(sizeof(묶음))', d: 'DefaultAllocator = StompAllocator', c: 'debug' },
+        { t: 'VirtualAlloc', d: '묶음 하나가 페이지 하나', c: 'debug os' },
+        { t: '[컨트롤 블록 | Knight] 한 덩어리', d: '블록 하나 안에 카운트와 객체가 같이 생성된다', c: 'obj' }
+      ],
+      note: '할당이 한 번뿐이고 카운트와 객체가 붙어 있어 캐시에도 좋다. 대신 메모리가 하나로 묶여 있다는 점이 수명에 영향을 준다 (9번 섹션).'
+    },
+    vec: {
+      release: [
+        { t: 'Vector<Int32>::push_back(v)', d: '용량이 모자라면 더 큰 버퍼가 필요하다' },
+        { t: 'StlAllocator<Int32>::allocate(newCap)', d: 'count ≤ INT32_MAX / sizeof 검사 후 size = newCap × 4', c: 'release' },
+        { t: 'PoolAllocator::Alloc(size)', d: 'DefaultAllocator 호출', c: 'release' },
+        { t: 'GMemory->Allocate(size)', d: '용량에 따라 다른 풀 (7번 섹션에서 직접 늘려 보기)', c: 'release pool' },
+        { t: '옛 버퍼 deallocate(pOld, oldCap)', d: 'count는 쓰지 않는다. 크기는 MemoryHeader가 이미 안다', c: 'release' }
+      ],
+      debug: [
+        { t: 'Vector<Int32>::push_back(v)', d: '용량이 모자라면 더 큰 버퍼가 필요하다' },
+        { t: 'StlAllocator<Int32>::allocate(newCap)', d: 'size = newCap × 4', c: 'debug' },
+        { t: 'StompAllocator::Alloc(size)', d: '버퍼 끝이 페이지 끝 → 범위 밖 쓰기를 즉시 잡는다', c: 'debug os' },
+        { t: '옛 버퍼 deallocate → VirtualFree', d: '옛 버퍼를 가리키던 포인터로 접근하면 즉시 AV', c: 'debug' }
+      ],
+      note: 'STL 컨테이너는 <code>new</code>를 직접 쓰지 않고 할당기 타입의 <code>allocate/deallocate</code>만 부른다. 그래서 할당기 인자 하나만 바꾸면 컨테이너 코드는 그대로 두고 메모리 출처만 바꿀 수 있다 (<code>Container.h</code>의 별칭).'
+    },
+    op: {
+      release: [
+        { t: 'ObjectPool<Knight>::Pop(args...)', d: '① 메모리 확보 → ② placement new' },
+        { t: 'GetBase() → static ObjectPoolBase SBase', d: 'Knight 전용. 처음 호출될 때 sizeof(Knight)로 한 번 만들어진다', c: 'release' },
+        { t: 'SBase.Alloc() → pPool_->Pop()', d: '블록 크기 = sizeof(Knight) + 16 딱 맞는 전용 MemoryPool. 비었으면 _aligned_malloc', c: 'release pool' },
+        { t: 'AttachHeader(pHeader, blockSize_)', d: '헤더를 붙이고 header + 1 반환', c: 'release' },
+        { t: 'new(pMemory) Knight(args...)', d: '생성자 호출', c: 'obj' }
+      ],
+      debug: [
+        { t: 'ObjectPool<Knight>::Pop(args...)', d: '#ifdef _DEBUG로 직접 분기' },
+        { t: 'StompAllocator::Alloc(sizeof(Knight))', d: '풀을 거치지 않는다. GetUseCount()도 항상 0', c: 'debug' },
+        { t: 'VirtualAlloc', d: '객체마다 페이지', c: 'debug os' },
+        { t: 'new(pMemory) Knight(args...)', d: '생성자 호출', c: 'obj' }
+      ],
+      note: '돌려줄 때는 <code>ObjectPool&lt;Knight&gt;::Push(p)</code>: 소멸자 호출 → 같은 전용 풀에 Push. GMemory를 전혀 거치지 않는다.'
+    },
+    opms: {
+      release: {
+        head: [{ t: 'ObjectPool<Knight>::MakeShared(args...)', d: '① Pop으로 객체 → ② SharedPtr(pObj, Push, StlAllocator<Knight>())' }],
+        lanes: [
+          { label: '객체', nodes: [
+            { t: 'Pop(args...)', d: 'Knight 전용 풀에서 블록 + 생성자', c: 'release pool' },
+            { t: 'Knight 블록', d: 'sizeof(Knight) + 16 전용 풀 소속', c: 'obj' }
+          ] },
+          { label: '컨트롤 블록', nodes: [
+            { t: 'StlAllocator<컨트롤 블록>::allocate(1)', d: '3번째 인자를 rebind해서 부른다', c: 'release' },
+            { t: 'GMemory 공용 풀', d: '컨트롤 블록 크기 + 16에 맞는 풀 (삭제자 Push, 할당기도 이 안에 저장)', c: 'release pool' }
+          ] }
+        ]
+      },
+      debug: {
+        head: [{ t: 'ObjectPool<Knight>::MakeShared(args...)', d: '① Pop으로 객체 → ② SharedPtr(pObj, Push, StlAllocator<Knight>())' }],
+        lanes: [
+          { label: '객체', nodes: [
+            { t: 'Pop → StompAllocator::Alloc', d: 'Knight 페이지', c: 'debug' },
+            { t: 'Knight 블록', d: 'VirtualAlloc 페이지', c: 'obj' }
+          ] },
+          { label: '컨트롤 블록', nodes: [
+            { t: 'StlAllocator<컨트롤 블록>::allocate(1)', d: 'DefaultAllocator = Stomp', c: 'debug' },
+            { t: 'StompAllocator::Alloc', d: '컨트롤 블록도 따로 한 페이지', c: 'debug os' }
+          ] }
+        ]
+      },
+      note: '객체와 컨트롤 블록이 <b>서로 다른 곳에서 따로</b> 할당된다. 객체는 전용 풀에서 와야 하므로 묶음 한 덩어리(<code>allocate_shared</code>)로 만들 수 없다. 둘이 각각 언제 돌아가는지는 9번 섹션에서 단계별로 본다.'
+    }
+  };
+
+  function nodeHtml(n) {
+    return '<div class="node ' + (n.c || '') + '"><div class="t">' + esc(n.t) + '</div><div class="d">' + esc(n.d) + '</div></div>';
+  }
+  function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+  function chain(list) { return list.map(nodeHtml).join('<div class="arrow"></div>'); }
+
+  var pathFlow = document.getElementById('pathFlow'), pathNote = document.getElementById('pathNote');
+  var entryBtns = Array.prototype.slice.call(document.querySelectorAll('[data-entry]'));
+  var buildBtns = Array.prototype.slice.call(document.querySelectorAll('[data-build]'));
+  var curEntry = 'xnew', curBuild = 'release';
+  function renderPath() {
+    var p = PATHS[curEntry], v = p[curBuild];
+    if (Array.isArray(v)) {
+      pathFlow.innerHTML = chain(v);
+    } else {
+      pathFlow.innerHTML = chain(v.head) + '<div class="arrow"></div><div class="split">' +
+        v.lanes.map(function (l) { return '<div class="lane"><div class="branchlabel">' + l.label + '</div>' + chain(l.nodes) + '</div>'; }).join('') +
+        '</div>';
+    }
+    pathNote.innerHTML = p.note;
+  }
+  entryBtns.forEach(function (b) { b.addEventListener('click', function () { curEntry = b.getAttribute('data-entry'); pressGroup(entryBtns, b); renderPath(); }); });
+  buildBtns.forEach(function (b) { b.addEventListener('click', function () { curBuild = b.getAttribute('data-build'); pressGroup(buildBtns, b); renderPath(); }); });
+  var he = hashParam('entry'), hb = hashParam('build');
+  if (he && PATHS[he]) { curEntry = he; pressGroup(entryBtns, document.querySelector('[data-entry="' + he + '"]')); }
+  if (hb === 'debug' || hb === 'release') { curBuild = hb; pressGroup(buildBtns, document.querySelector('[data-build="' + hb + '"]')); }
+  renderPath();
+
+  /* ── 2. StompAllocator 계산기 (Allocator.cpp와 같은 식) ── */
+  var PAGE = 4096, ALIGN = 16;
+  var sNum = document.getElementById('stompReq'), sRng = document.getElementById('stompRange');
+  var sEq = document.getElementById('stompEq'), sStrip = document.getElementById('stompStrip');
+  var sRuler = document.getElementById('stompRuler'), sPtr = document.getElementById('stompPtr'), sNote = document.getElementById('stompNote');
+  function renderStomp(v) {
+    v = Math.max(1, Math.min(20000, Math.floor(Number(v) || 1)));
+    sNum.value = v; sRng.value = Math.min(v, 9000);
+    var aligned = Math.floor((v + ALIGN - 1) / ALIGN) * ALIGN;
+    var total = Math.floor((aligned + PAGE - 1) / PAGE) * PAGE;
+    var offset = total - aligned;
+    var slack = aligned - v;
+    sEq.innerHTML =
+      '<span class="box d"><small>size</small>' + v + '</span><span class="op">→</span>' +
+      '<span class="box"><small>alignedSize (16 올림)</small>' + aligned + '</span><span class="op">→</span>' +
+      '<span class="box"><small>totalSize (4096 올림)</small>' + total + '</span><span class="op">→</span>' +
+      '<span class="box r"><small>offset = total − aligned</small>' + offset + '</span>';
+    // 띠: 커밋된 total을 88%, 그 뒤 커밋 안 된 주소를 12%로 그린다. 작은 칸도 보이도록 최소 폭을 준다
+    var span = 88;
+    var wSlack = slack > 0 ? Math.max(2.5, slack / total * span) : 0;
+    var wData = Math.max(4, v / total * span);
+    var wOff = Math.max(0, span - wData - wSlack);
+    function cell(cls, w, label) {
+      if (w <= 0) return '';
+      var inner = w >= 9 ? label : '';
+      return '<div class="cell ' + cls + '" style="width:' + w + '%" title="' + label.replace(/<[^>]+>/g, ' ') + '">' + inner + '</div>';
+    }
+    sStrip.innerHTML =
+      cell('f', wOff, '<b>offset ' + offset + 'B</b>쓰지 않음') +
+      cell('d', wData, '<b>데이터 ' + v + 'B</b>') +
+      cell('s', wSlack, '<b>' + slack + 'B</b>여분') +
+      '<div class="cell x" style="width:12%"><b>AV</b>다음 주소</div>';
+    // offset 칸이 좁으면 pBase와 +offset 글자가 겹치므로 한 라벨로 합친다
+    sRuler.innerHTML = wOff >= 10
+      ? '<span style="width:' + wOff + '%">pBase</span><span style="width:' + (wData + wSlack) + '%">+' + offset + '</span><span style="width:12%">+' + total + '</span>'
+      : '<span style="width:' + span + '%">pBase (데이터는 +' + offset + '부터)</span><span style="width:12%">+' + total + '</span>';
+    sPtr.innerHTML = '<span style="left:' + Math.min(wOff, 60) + '%">▼ 반환 주소 = pBase + ' + offset + ' (16 정렬)</span>';
+    var pages = total / PAGE;
+    sNote.innerHTML = '페이지 <b>' + pages + '</b>개(' + total + 'B)를 커밋하고 <b>' + v + '</b>B만 쓴다. ' +
+      (slack > 0 ? '데이터 뒤 <b>' + slack + '</b>B는 16 정렬을 지키느라 생긴 여분이라 여기까지 넘쳐 써도 크래시가 나지 않는다. ' : '데이터 끝이 정확히 페이지 끝이라 1바이트만 넘쳐도 크래시가 난다. ') +
+      (offset > 0 ? '앞쪽 <b>' + offset + '</b>B도 커밋된 메모리라 앞으로 넘치는 쓰기는 잡지 못한다. ' : '') +
+      'VirtualAlloc은 64KB 단위로 주소를 잡으므로 커밋한 페이지 뒤는 아무도 쓰지 않는 주소다. 해제할 때는 <code>ptr % 4096</code>으로 offset을 되찾아 pBase를 VirtualFree한다.';
+  }
+  sNum.addEventListener('input', function () { renderStomp(sNum.value); });
+  sRng.addEventListener('input', function () { renderStomp(sRng.value); });
+  document.querySelectorAll('[data-sv]').forEach(function (b) { b.addEventListener('click', function () { renderStomp(b.getAttribute('data-sv')); }); });
+  renderStomp(hashParam('stomp') || 100);
+
+  /* ── 4. 크기 → 풀 ── */
   var bar = document.getElementById('bar');
   var groups = [
-    { cls: 'b32', from: 0, to: 32, w: 22.5 },
-    { cls: 'b128', from: 32, to: 40, w: 22.5 },
-    { cls: 'b256', from: 40, to: 48, w: 45 }
+    { cls: 'b32', from: 0, to: 32, w: 22.5, start: 0 },
+    { cls: 'b128', from: 32, to: 40, w: 22.5, start: 22.5 },
+    { cls: 'b256', from: 40, to: 48, w: 45, start: 45 }
   ];
   var cells = [];
   groups.forEach(function (g) {
@@ -476,54 +844,256 @@ ol.steps li.branch::before { background: var(--accent-soft); color: var(--accent
   big.textContent = '직행';
   bar.appendChild(big);
 
-  function poolIndexOf(block) {
-    for (var i = 0; i < pools.length; i++) if (block <= pools[i]) return i;
-    return -1;
-  }
   function markerLeft(idx) {
     if (idx < 0) return 95;
     var g = idx < 32 ? groups[0] : idx < 40 ? groups[1] : groups[2];
-    var start = g === groups[0] ? 0 : g === groups[1] ? 22.5 : 45;
-    var n = g.to - g.from;
-    return start + (idx - g.from + 0.5) * g.w / n;
+    return g.start + (idx - g.from + 0.5) * g.w / (g.to - g.from);
   }
-
   var num = document.getElementById('req'), rng = document.getElementById('reqRange');
   var eq = document.getElementById('eq'), waste = document.getElementById('waste'), mk = document.getElementById('mk');
-
   function render(v) {
     v = Math.max(1, Math.min(6000, Math.floor(Number(v) || 1)));
     num.value = v;
     rng.value = Math.min(v, 5000);
     var block = v + HEADER;
-    var idx = block <= MAX ? poolIndexOf(block) : -1;
+    var pool = poolOf(block);
+    var idx = pools.indexOf(pool);
     cells.forEach(function (c, i) { c.classList.toggle('on', i === idx); });
     big.classList.toggle('on', idx < 0);
     mk.style.left = markerLeft(idx) + '%';
-
     var result = idx >= 0
-      ? '<span class="box r"><small>담당 풀</small>Pool ' + pools[idx] + '</span>'
+      ? '<span class="box r"><small>담당 풀</small>Pool ' + pool + '</span>'
       : '<span class="box r"><small>풀 없음</small>_aligned_malloc</span>';
     eq.innerHTML =
       '<span class="box d"><small>요청</small>' + v + '</span><span class="op">+</span>' +
       '<span class="box h"><small>헤더</small>16</span><span class="op">=</span>' +
       '<span class="box"><small>블록 (allocSize_)</small>' + block + '</span><span class="op">→</span>' + result;
-
     if (idx >= 0) {
-      var w = pools[idx] - block;
-      waste.innerHTML = '풀 블록 <b>' + pools[idx] + '</b>B 중 사용 <b>' + block + '</b>B, 남는 칸 <b>' + w + '</b>B' +
-        (block === pools[idx] ? ' (딱 맞음)' : '') + ' · 테이블 조회: <code>poolTable_[' + block + ']</code>';
+      var w = pool - block;
+      waste.innerHTML = '풀 블록 <b>' + pool + '</b>B 중 사용 <b>' + block + '</b>B, 남는 칸 <b>' + w + '</b>B' +
+        (w === 0 ? ' (딱 맞음)' : '') + ' · 테이블 조회: <code>poolTable_[' + block + ']</code>';
     } else {
       waste.innerHTML = '블록 <b>' + block + '</b>B는 MAX_ALLOC_SIZE(4096)를 넘는다 → 풀을 거치지 않고 할당하고, Release에서 <code>_aligned_free</code>로 바로 해제한다.';
     }
   }
-
   num.addEventListener('input', function () { render(num.value); });
   rng.addEventListener('input', function () { render(rng.value); });
-  document.querySelectorAll('.presets button').forEach(function (b) {
-    b.addEventListener('click', function () { render(b.getAttribute('data-v')); });
-  });
+  document.querySelectorAll('[data-v]').forEach(function (b) { b.addEventListener('click', function () { render(b.getAttribute('data-v')); }); });
   render(100);
+
+  /* ── 5. MemoryPool 샌드박스 ── */
+  var mp;
+  var mpStack = document.getElementById('mpStack'), mpOut = document.getElementById('mpOut');
+  var mpCnt = document.getElementById('mpCnt'), mpLog = document.getElementById('mpLog');
+  var mpDouble = document.getElementById('mpDouble'), mpPushLast = document.getElementById('mpPushLast');
+  function mpReset() {
+    mp = { stack: [], out: [], next: 0, use: 0, reserve: 0, hot: null };
+    mpRender('처음: <code>InitializeSListHead</code>로 빈 리스트. 블록은 하나도 없다.', '');
+  }
+  function mpRender(msg, kind) {
+    var h = '<div class="head">header_</div>';
+    for (var i = mp.stack.length - 1; i >= 0; i--) {
+      var n = mp.stack[i];
+      h += '<div class="link">' + (i === mp.stack.length - 1 ? '↓' : '↓ Next') + '</div>' +
+        '<div class="blk' + (n === mp.hot ? ' hot' : '') + '">' + n + ' · allocSize_ 0</div>';
+    }
+    h += '<div class="link">' + (mp.stack.length ? '↓ Next' : '↓') + '</div><div class="nil">nullptr</div>';
+    mpStack.innerHTML = h;
+    mpOut.innerHTML = mp.out.length ? mp.out.map(function (n) {
+      return '<button type="button" class="blk used' + (n === mp.hot ? ' hot' : '') + '" data-push="' + n + '" aria-label="' + n + ' Push">' + n + ' · 128</button>';
+    }).join('') : '<span class="muted small">(없음)</span>';
+    mpOut.querySelectorAll('[data-push]').forEach(function (b) { b.addEventListener('click', function () { mpPush(b.getAttribute('data-push')); }); });
+    mpCnt.innerHTML = 'useCount_ <b>' + mp.use + '</b> · reserveCount_ <b>' + mp.reserve + '</b> · 지금까지 _aligned_malloc <b>' + mp.next + '</b>번';
+    mpLog.innerHTML = msg;
+    mpLog.className = 'log' + (kind ? ' ' + kind : '');
+    mpDouble.disabled = mp.stack.length === 0;
+    mpPushLast.disabled = mp.out.length === 0;
+  }
+  function mpPop() {
+    var n, msg;
+    if (mp.stack.length === 0) {
+      n = String.fromCharCode(65 + (mp.next % 26)) + (mp.next >= 26 ? Math.floor(mp.next / 26) : '');
+      mp.next++;
+      msg = '<b>Pop</b>: 리스트가 비어서 <code>InterlockedPopEntrySList</code>가 nullptr → <code>_aligned_malloc(128, 16)</code>으로 새 블록 <b>' + n + '</b>를 만든다.';
+    } else {
+      n = mp.stack.pop();
+      mp.reserve--;
+      msg = '<b>Pop</b>: 꼭대기 블록 <b>' + n + '</b>를 꺼낸다. 새 할당 없이 재사용. allocSize_ == 0 확인 후 AttachHeader가 128을 적는다.';
+    }
+    mp.out.push(n); mp.use++; mp.hot = n;
+    mpRender(msg, 'good');
+  }
+  function mpPush(n) {
+    var i = mp.out.indexOf(n);
+    if (i < 0) return;
+    mp.out.splice(i, 1);
+    mp.stack.push(n); mp.use--; mp.reserve++; mp.hot = n;
+    mpRender('<b>Push(' + n + ')</b>: allocSize_ > 0 확인 → 0으로 바꾸고 꼭대기에 올린다. 메모리는 해제하지 않고 보관한다.', 'good');
+  }
+  document.getElementById('mpPop').addEventListener('click', mpPop);
+  mpPushLast.addEventListener('click', function () { if (mp.out.length) mpPush(mp.out[mp.out.length - 1]); });
+  mpDouble.addEventListener('click', function () {
+    var n = mp.stack[mp.stack.length - 1];
+    mp.hot = n;
+    mpRender('💥 <b>Push(' + n + ')</b> 다시: ' + n + '의 allocSize_가 이미 0이다 → <code>ASSERT_CRASH(pPtr->allocSize_ > 0)</code>에서 크래시. 막지 않았다면 같은 블록이 리스트에 두 번 들어가 두 사람에게 빌려줬을 것이다.', 'bad');
+  });
+  document.getElementById('mpReset').addEventListener('click', mpReset);
+  mpReset();
+
+  /* ── 7. Vector 재할당 ── */
+  var vec;
+  var vecFill = document.getElementById('vecFill'), vecText = document.getElementById('vecText'), vecLog = document.getElementById('vecLog');
+  function where(bytes) {
+    var p = poolOf(bytes + HEADER);
+    return p > 0 ? 'Pool ' + p : '_aligned_malloc';
+  }
+  function vecReset() { vec = { size: 0, cap: 0, rows: [] }; vecRender(); }
+  function vecPushOne() {
+    if (vec.size === vec.cap) {
+      var need = vec.size + 1;
+      var geo = vec.cap + Math.floor(vec.cap / 2);
+      var nc = geo < need ? need : geo;
+      var nb = nc * 4, ob = vec.cap * 4;
+      vec.rows.push({
+        at: vec.size + 1, cap: nc,
+        a: nb + 'B + 16 = ' + (nb + 16) + ' → ' + where(nb), aBig: nb + 16 > MAX,
+        r: vec.cap ? ob + 'B 블록 → ' + (ob + 16 > MAX ? '_aligned_free' : where(ob) + '에 Push') : '(없음)'
+      });
+      vec.cap = nc;
+    }
+    vec.size++;
+  }
+  function vecRender() {
+    var pct = vec.cap ? vec.size / vec.cap * 100 : 0;
+    vecFill.style.width = pct + '%';
+    vecText.textContent = 'size ' + vec.size + ' / capacity ' + vec.cap + (vec.cap ? ' (' + (vec.cap * 4) + 'B 버퍼)' : '');
+    var rows = vec.rows.slice(-10);
+    vecLog.innerHTML = rows.length ? rows.map(function (r, i) {
+      var last = i === rows.length - 1;
+      return '<tr' + (last ? '' : ' class="dim"') + '><td class="mono">' + r.at + '번째</td><td class="mono">' + r.cap + '</td>' +
+        '<td class="mono ' + (r.aBig ? 'big' : 'new') + '">' + r.a + '</td><td class="mono old">' + r.r + '</td></tr>';
+    }).join('') : '<tr class="dim"><td colspan="4">아직 할당 없음 (빈 vector는 버퍼가 없다)</td></tr>';
+  }
+  document.getElementById('vecPush1').addEventListener('click', function () { vecPushOne(); vecRender(); });
+  document.getElementById('vecPush10').addEventListener('click', function () { for (var i = 0; i < 10; i++) vecPushOne(); vecRender(); });
+  document.getElementById('vecGrow').addEventListener('click', function () {
+    var n = vec.rows.length;
+    var guard = 0;
+    while (vec.rows.length === n && guard++ < 100000) vecPushOne();
+    vecRender();
+  });
+  document.getElementById('vecReset').addEventListener('click', vecReset);
+  vecReset();
+
+  /* ── 9. 두 MakeShared ── */
+  // 단계: 0 생성, 1 복사, 2 weak, 3 strong 0, 4 weak 0
+  var STEPS = [
+    { code: 'auto p1 = MakeShared(...)', strong: 1, weak: 0 },
+    { code: 'auto p2 = p1', strong: 2, weak: 0 },
+    { code: 'WeakPtr<Knight> w = p1', strong: 2, weak: 1 },
+    { code: 'p1.reset(); p2.reset()', strong: 0, weak: 1 },
+    { code: 'w.reset()', strong: 0, weak: 0 }
+  ];
+  // 각 블록이 단계마다 어디에 있는지: inuse / gmem / opool / heap, dead = 객체 소멸됨
+  function blocksFor(mode, st) {
+    if (mode === 'mem') {
+      var place = st < 4 ? 'inuse' : 'gmem';
+      return [{ kind: 'combo', place: place, dead: st >= 3, hot: st === 3 || st === 4 }];
+    }
+    var objPlace = st < 3 ? 'inuse' : 'opool';
+    var cbPlace = st < 4 ? 'inuse' : (mode === 'op3' ? 'gmem' : 'heap');
+    return [
+      { kind: 'obj', place: objPlace, hot: st === 3 },
+      { kind: 'cb', place: cbPlace, hot: st === 4 }
+    ];
+  }
+  var CAPS = {
+    mem: [
+      '<code>allocate_shared</code>가 GMemory 풀에서 블록 <b>하나</b>를 받아 컨트롤 블록과 Knight를 같이 만든다.',
+      '복사하면 strong 카운트만 오른다. 메모리 이동 없음.',
+      'weak_ptr는 weak 카운트만 올린다. 객체를 살려 두지는 않는다.',
+      'strong이 0 → <b>~Knight()가 불린다</b>. 하지만 Knight 자리는 컨트롤 블록과 한 덩어리라 <b>메모리는 아직 못 돌려준다</b> (weak가 컨트롤 블록을 봐야 함).',
+      'weak도 0 → 컨트롤 블록이 끝나면서 <b>한 덩어리 전체</b>가 <code>StlAllocator::deallocate</code> → GMemory 풀로 Push된다.'
+    ],
+    op3: [
+      '객체는 <code>Pop</code>으로 <b>Knight 전용 풀</b>에서, 컨트롤 블록은 3번째 인자 <code>StlAllocator</code>로 <b>GMemory 공용 풀</b>에서 따로 받는다.',
+      '복사하면 strong 카운트만 오른다.',
+      'weak_ptr는 weak 카운트만 올린다.',
+      'strong이 0 → 삭제자 <code>Push(pObj)</code>가 불린다: <b>~Knight() + 객체 블록이 바로 전용 풀로</b> 돌아간다. 다음 <code>Pop</code>이 이 블록을 재사용할 수 있다. 컨트롤 블록은 weak 때문에 남는다.',
+      'weak도 0 → <b>컨트롤 블록만</b> 저장해 둔 <code>StlAllocator</code>로 GMemory 풀에 돌아간다.'
+    ],
+    op2: [
+      '<code>SharedPtr(pObj, Push)</code>: 할당기를 안 주면 컨트롤 블록은 <b>기본 <code>operator new</code></b>(OS 힙)로 만들어진다. 우리 풀과 Stomp를 거치지 않는다.',
+      '복사하면 strong 카운트만 오른다.',
+      'weak_ptr는 weak 카운트만 올린다.',
+      'strong이 0 → <code>Push(pObj)</code>: 객체는 3인자와 똑같이 전용 풀로 돌아간다. 삭제자는 객체에만 쓰인다.',
+      'weak도 0 → 컨트롤 블록은 <code>delete</code>로 OS 힙에 반환된다. 결과는 맞지만 할당마다 힙 비용이 들고, Debug에서 Stomp 검사를 못 받는다.'
+    ]
+  };
+  var NOTES = {
+    mem: '정리: <b>소멸 시점</b>(strong 0)과 <b>메모리 반납 시점</b>(weak 0)이 갈라진다. 큰 객체를 weak_ptr가 오래 잡고 있으면 이미 죽은 객체 자리까지 메모리가 묶여 있다.',
+    op3: '정리: 객체 메모리는 strong 0에서 바로 풀로, 컨트롤 블록은 weak 0에서 GMemory로. 두 덩어리가 따로 할당됐기 때문에 따로 돌아갈 수 있다.',
+    op2: '정리: 동작은 같지만 컨트롤 블록이 매번 <code>operator new/delete</code>를 탄다. 3번째 인자는 "컨트롤 블록도 우리 할당기에서 받아라"라는 뜻이다.'
+  };
+  var PLACES = [
+    { id: 'inuse', t: '사용 중', d: 'shared_ptr / weak_ptr가 가리킴' },
+    { id: 'opool', t: 'ObjectPool<Knight> 풀', d: '전용 MemoryPool (sizeof + 16)' },
+    { id: 'gmem', t: 'GMemory 공용 풀', d: '크기별 48개 풀' },
+    { id: 'heap', t: 'OS 힙', d: 'operator new / delete' }
+  ];
+  function blockHtml(b) {
+    var state = b.place === 'inuse' ? '' : b.place === 'heap' ? ' gone' : ' home';
+    var hot = b.hot ? ' hot' : '';
+    if (b.kind === 'combo') {
+      if (b.place !== 'inuse') return '<div class="mblk' + state + hot + '"><div>[컨트롤 블록 | Knight 자리] 블록 전체</div></div>';
+      return '<div class="mblk' + hot + '"><div class="cb">컨트롤 블록</div><div' + (b.dead ? ' class="zombie"' : '') + '>Knight' + (b.dead ? ' (소멸됨, 자리만 남음)' : '') + '</div></div>';
+    }
+    if (b.kind === 'cb') return '<div class="mblk' + state + hot + '"><div class="cb">컨트롤 블록' + (b.place === 'inuse' ? '' : ' (반환)') + '</div></div>';
+    return '<div class="mblk' + state + hot + '"><div>Knight 블록' + (b.place === 'inuse' ? '' : ' (allocSize_ 0, 재사용 대기)') + '</div></div>';
+  }
+
+  var msBody = document.getElementById('msBody'), msGate = document.getElementById('msGate');
+  var msPlaces = document.getElementById('msPlaces'), msRefs = document.getElementById('msRefs'), msNote = document.getElementById('msNote');
+  var msCap = msBody.querySelector('[data-role="caption"]'), msPos = msBody.querySelector('[data-role="pos"]');
+  var msBtn = {};
+  msBody.querySelectorAll('[data-act]').forEach(function (b) { msBtn[b.getAttribute('data-act')] = b; });
+  var modeBtns = Array.prototype.slice.call(msBody.querySelectorAll('[data-mode]'));
+  var msMode = 'mem', msIdx = 0, msTimer = null;
+  function msShow(i) {
+    msIdx = Math.max(0, Math.min(STEPS.length - 1, i));
+    var st = STEPS[msIdx];
+    msCap.innerHTML = '<code>' + esc(st.code) + '</code> — ' + CAPS[msMode][msIdx];
+    msRefs.innerHTML = 'strong(use_count) <b>' + st.strong + '</b> · weak_ptr <b>' + st.weak + '</b> · ~Knight() ' +
+      (msIdx >= 3 ? '<b class="yes">호출됨</b>' : '<b>아직</b>');
+    var bl = blocksFor(msMode, msIdx);
+    msPlaces.innerHTML = PLACES.map(function (p) {
+      var used = msMode === 'mem' ? (p.id === 'inuse' || p.id === 'gmem') : msMode === 'op3' ? p.id !== 'heap' : p.id !== 'gmem';
+      var items = bl.filter(function (b) { return b.place === p.id; }).map(blockHtml).join('');
+      return '<div class="place' + (used ? '' : ' off') + '"><div><div class="pt">' + p.t + '</div><div class="pd">' + (used ? p.d : '이 방식에서는 안 씀') + '</div></div><div class="items">' + items + '</div></div>';
+    }).join('');
+    msNote.innerHTML = NOTES[msMode];
+    msPos.textContent = (msIdx + 1) + ' / ' + STEPS.length;
+    msBtn.first.disabled = msBtn.prev.disabled = msIdx === 0;
+    msBtn.next.disabled = msIdx === STEPS.length - 1;
+    if (msIdx === STEPS.length - 1) msStop();
+  }
+  function msStop() { if (msTimer) { clearInterval(msTimer); msTimer = null; } msBtn.play.setAttribute('aria-pressed', 'false'); }
+  msBtn.first.addEventListener('click', function () { msStop(); msShow(0); });
+  msBtn.prev.addEventListener('click', function () { msStop(); msShow(msIdx - 1); });
+  msBtn.next.addEventListener('click', function () { msStop(); msShow(msIdx + 1); });
+  msBtn.play.addEventListener('click', function () {
+    if (msTimer) { msStop(); return; }
+    if (msIdx === STEPS.length - 1) msShow(0);
+    msBtn.play.setAttribute('aria-pressed', 'true');
+    msTimer = setInterval(function () { msShow(msIdx + 1); }, 1600);
+  });
+  modeBtns.forEach(function (b) { b.addEventListener('click', function () { msMode = b.getAttribute('data-mode'); pressGroup(modeBtns, b); msShow(msIdx); }); });
+  function msOpen() { msGate.hidden = true; msBody.hidden = false; }
+  document.getElementById('msOpen').addEventListener('click', msOpen);
+  var hm = hashParam('mode'), hs = hashParam('step');
+  if (hm && CAPS[hm]) { msMode = hm; pressGroup(modeBtns, msBody.querySelector('[data-mode="' + hm + '"]')); }
+  if (/[#&]open/.test(location.hash)) msOpen();
+  msShow(hs ? Number(hs) - 1 : 0);
 })();
 </script>
 </body>

@@ -1,0 +1,646 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory와 MemoryPool</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: 한 줄 세로 흐름. 색은 의미로만: 청록 = 풀 안/헤더, 파랑 = 사용 중/데이터, 주황 = 현재 선택, 빨강 = 크래시 */
+:root {
+  --bg: #f3f5f7; --surface: #ffffff; --ink: #18212b; --muted: #5b6876; --line: #d3dae2;
+  --header: #0f7b72; --header-soft: #d5efec;
+  --data: #2f5fb3; --data-soft: #dce6f8;
+  --free: #8a96a3; --free-soft: #e7ebef;
+  --accent: #c26a12; --accent-soft: #f7e6d3;
+  --danger: #b83a3a; --danger-soft: #f6dddd;
+  --f-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", system-ui, sans-serif;
+  --f-mono: "JetBrains Mono", Consolas, "D2Coding", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12171d; --surface: #1a2129; --ink: #e4e9ef; --muted: #98a5b3; --line: #2f3a46;
+    --header: #3cc2b5; --header-soft: #173a38; --data: #7aa2f0; --data-soft: #1e2c47;
+    --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373; --danger-soft: #3d2222;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12171d; --surface: #1a2129; --ink: #e4e9ef; --muted: #98a5b3; --line: #2f3a46;
+  --header: #3cc2b5; --header-soft: #173a38; --data: #7aa2f0; --data-soft: #1e2c47;
+  --free: #7d8996; --free-soft: #232b34; --accent: #f0a050; --accent-soft: #3d2c1a; --danger: #e57373; --danger-soft: #3d2222;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 15px; line-height: 1.65; }
+.wrap {
+  max-width: 920px; margin: 0 auto; padding-block: 40px 72px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 44px;
+}
+header h1 { font-size: 30px; line-height: 1.25; margin: 0 0 8px; text-wrap: balance; letter-spacing: -0.01em; }
+header p { margin: 0; color: var(--muted); max-width: 65ch; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+h2 { font-size: 20px; margin: 0; text-wrap: balance; }
+h3 { font-size: 15px; margin: 0; }
+p { margin: 0; max-width: 68ch; }
+.muted { color: var(--muted); }
+.small { font-size: 13.5px; }
+code, .mono { font-family: var(--f-mono); font-size: 0.88em; }
+code { background: var(--free-soft); padding: 1px 5px; border-radius: 4px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 18px; min-width: 0; }
+.scroll { overflow-x: auto; overflow-y: hidden; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--muted); }
+.legend span::before { content: ""; display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+.chip { display: inline-block; font-family: var(--f-mono); font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid currentColor; vertical-align: 1px; white-space: nowrap; }
+.chip.done { color: var(--header); }
+button { font: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btns { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.btns .lbl { font-size: 12.5px; color: var(--muted); margin-right: 4px; }
+.btns button { font-family: var(--f-mono); font-size: 12.5px; padding: 5px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.btns button:hover { border-color: var(--accent); color: var(--accent); }
+.btns button:disabled { opacity: .4; cursor: default; }
+.btns .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+.explain { font-size: 13.5px; border-left: 3px solid var(--accent); padding: 4px 0 4px 12px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 500; }
+
+/* ── 1. 비유 ── */
+.analogy { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.role { border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; background: var(--surface); display: flex; flex-direction: column; gap: 6px; }
+.role .who { font-family: var(--f-mono); font-weight: 600; font-size: 15px; }
+.role .like { font-size: 13px; color: var(--accent); font-weight: 500; }
+.role ul { margin: 0; padding-left: 18px; font-size: 13.5px; }
+.role ul li { margin: 2px 0; }
+.role.m { border-top: 3px solid var(--accent); }
+.role.p { border-top: 3px solid var(--header); }
+
+/* ── 2. 구조 ── */
+.memoryBox { border: 2px solid var(--accent); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 14px; min-width: 640px; }
+.memoryBox > .title { font-family: var(--f-mono); font-weight: 600; color: var(--accent); }
+.memberTitle { font-family: var(--f-mono); font-size: 12.5px; margin-bottom: 6px; }
+.memberTitle span { color: var(--muted); font-family: var(--f-body); }
+.table { display: flex; height: 34px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.table .seg { height: 100%; border-right: 1px solid var(--surface); background: color-mix(in srgb, var(--header) 18%, var(--surface)); cursor: pointer; transition: background .15s; }
+.table .seg.alt { background: color-mix(in srgb, var(--header) 32%, var(--surface)); }
+.table .seg.zero { background: var(--free-soft); cursor: default; }
+.table .seg.on { background: var(--accent); }
+.tableRuler { position: relative; height: 18px; font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.tableRuler span { position: absolute; top: 2px; transform: translateX(-50%); white-space: nowrap; }
+.tableRuler span:first-child { transform: none; }
+.tableRuler span:last-child { transform: translateX(-100%); }
+.links { position: relative; height: 34px; }
+.links svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.tiles { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px; }
+.tile { font-family: var(--f-mono); font-size: 10.5px; padding: 4px 0; text-align: center; border-radius: 4px; border: 1px solid var(--header); background: var(--header-soft); color: var(--header); cursor: pointer; transition: background .15s, color .15s; }
+.tile:hover { border-color: var(--accent); }
+.tile.on { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.lookup { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.lookup label { font-weight: 500; }
+.lookup input[type=number] { width: 100px; font-family: var(--f-mono); font-size: 15px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.lookup input[type=range] { flex: 1 1 220px; accent-color: var(--accent); }
+.result { font-size: 14px; }
+.result b { font-family: var(--f-mono); color: var(--accent); }
+
+/* ── 3. 따라가기 ── */
+.stepper { display: flex; flex-direction: column; gap: 14px; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.controls button { font-family: var(--f-mono); font-size: 13px; padding: 5px 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.controls button:hover { border-color: var(--accent); color: var(--accent); }
+.controls button:disabled { opacity: .4; cursor: default; }
+.controls button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.controls .pos { margin-left: auto; font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.phase { font-family: var(--f-mono); font-size: 12px; color: var(--muted); }
+.lanes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.lane { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; min-height: 132px; display: flex; flex-direction: column; gap: 6px; transition: border-color .2s, background .2s; }
+.lane .ln { font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; color: var(--muted); }
+.lane .lt { font-size: 13.5px; }
+.lane .lt code { font-size: 0.85em; }
+.lane.on { border-color: var(--accent); background: var(--accent-soft); }
+.lane.on .ln { color: var(--accent); }
+.lane.bad { border-color: var(--danger); background: var(--danger-soft); }
+.watch { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.watch div { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; }
+.watch small { display: block; font-size: 11px; color: var(--muted); font-family: var(--f-mono); }
+.watch b { font-family: var(--f-mono); font-size: 16px; font-variant-numeric: tabular-nums; }
+.watch div.chg { border-color: var(--accent); }
+.watch div.chg b { color: var(--accent); }
+.blockview { display: flex; flex-direction: column; gap: 4px; }
+.bstrip { display: flex; height: 46px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); min-width: 640px; }
+.bcell { display: flex; flex-direction: column; justify-content: center; align-items: center; font-size: 11.5px; line-height: 1.25; white-space: nowrap; overflow: hidden; border-right: 1px solid var(--surface); }
+.bcell b { font-family: var(--f-mono); font-size: 12px; }
+.bcell.h { background: var(--header-soft); color: var(--header); }
+.bcell.d { background: var(--data-soft); color: var(--data); }
+.bcell.f { background: repeating-linear-gradient(135deg, var(--free-soft) 0 6px, transparent 6px 12px); color: var(--free); }
+.bcell.g { background: var(--free-soft); color: var(--muted); }
+.bcell.hot { box-shadow: inset 0 0 0 2px var(--accent); }
+.bnote { font-size: 12.5px; color: var(--muted); }
+.none { font-size: 13px; color: var(--muted); padding: 12px 0; }
+
+/* ── 4. 시뮬레이터 ── */
+.simgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.colhead { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.live { display: flex; flex-direction: column; gap: 6px; }
+.ptr { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; border: 1px solid var(--data); background: var(--data-soft); border-radius: 6px; padding: 5px 8px; }
+.ptr .nm { font-family: var(--f-mono); font-weight: 600; color: var(--data); }
+.ptr .info { font-family: var(--f-mono); color: var(--ink); flex: 1; min-width: 0; }
+.ptr button { font-family: var(--f-mono); font-size: 11.5px; padding: 2px 8px; border-radius: 5px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+.ptr button:hover { border-color: var(--accent); color: var(--accent); }
+.ptr.big { border-color: var(--accent); background: var(--accent-soft); }
+.ptr.hot, .pcard.hot { box-shadow: 0 0 0 2px var(--accent); }
+.pcards { display: flex; flex-direction: column; gap: 8px; }
+.pcard { border: 1px solid var(--header); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.pcard .pt { font-family: var(--f-mono); font-size: 12.5px; font-weight: 600; color: var(--header); display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.pcard .pt span { font-weight: 400; color: var(--muted); }
+.pcard .stk { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; font-family: var(--f-mono); font-size: 11.5px; }
+.pcard .stk .hd { padding: 2px 6px; border-radius: 4px; background: var(--ink); color: var(--bg); }
+.pcard .stk .b { padding: 2px 6px; border-radius: 4px; border: 1px solid var(--header); background: var(--header-soft); color: var(--header); }
+.pcard .stk .ar { color: var(--accent); }
+.log { font-size: 13.5px; border-radius: 6px; padding: 8px 12px; background: var(--bg); border: 1px solid var(--line); min-height: 2.6em; }
+.log .m { color: var(--accent); font-weight: 600; }
+.log .p { color: var(--header); font-weight: 600; }
+
+/* ── 5. 생성/소멸 ── */
+.bars { display: flex; flex-direction: column; gap: 6px; }
+.ftable { display: flex; height: 26px; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; min-width: 520px; background: var(--free-soft); }
+.ftable i { display: block; height: 100%; border-right: 1px solid var(--surface); background: color-mix(in srgb, var(--header) 22%, var(--surface)); }
+.ftable i.alt { background: color-mix(in srgb, var(--header) 36%, var(--surface)); }
+.ftable i.new { background: var(--accent); }
+.tree { font-family: var(--f-mono); font-size: 13px; line-height: 1.9; white-space: pre; margin: 0; }
+.tree .c { color: var(--muted); }
+.tree .k { color: var(--header); font-weight: 600; }
+.tree .a { color: var(--accent); }
+
+@media (max-width: 720px) {
+  .analogy, .simgrid { grid-template-columns: 1fr; }
+  .lanes { grid-template-columns: 1fr; }
+  .lane { min-height: 0; }
+  .watch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  header h1 { font-size: 25px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="eyebrow">OogieEngine Server · Phase 1-3 · Step 3-2 / 4-1</div>
+  <h1>Memory와 MemoryPool</h1>
+  <p><code>Memory</code>는 크기를 보고 어느 풀로 보낼지 정하는 <b>배정 담당</b>이고, <code>MemoryPool</code>은 한 가지 크기의 블록만 쌓아 두는 <b>보관함</b>이다. 둘이 어떻게 나눠 일하는지, 호출 한 번이 두 클래스를 어떻게 오가는지 따라가 본다. <span class="chip done">Step 4-1 완료</span></p>
+</header>
+
+<!-- 1 -->
+<section>
+  <h2>1. 한 문장씩: 누가 무엇을 아나</h2>
+  <p class="muted">물품 보관소로 비유하면 <code>Memory</code>는 접수 창구, <code>MemoryPool</code>은 같은 크기 상자만 넣는 선반 하나다. 창구는 선반 48개를 갖고 있고, 손님이 맡긴 물건 크기를 보고 맞는 선반으로 보낸다.</p>
+  <div class="analogy">
+    <div class="role m">
+      <div class="who">Memory (GMemory 하나)</div>
+      <div class="like">접수 창구: "이 크기면 저 선반"</div>
+      <ul>
+        <li>요청 크기 + 헤더 16 = <b>블록 크기</b>를 계산한다</li>
+        <li>블록 크기로 <code>poolTable_</code>을 보고 담당 풀을 고른다</li>
+        <li>4096을 넘으면 풀 없이 <code>_aligned_malloc</code>으로 직접 처리한다</li>
+        <li>헤더를 붙이고(<code>AttachHeader</code>) 떼는(<code>DetachHeader</code>) 일을 한다</li>
+        <li>풀 48개를 <b>소유</b>한다 (<code>pools_</code>, 소멸자에서 delete)</li>
+      </ul>
+    </div>
+    <div class="role p">
+      <div class="who">MemoryPool (크기마다 하나)</div>
+      <div class="like">선반 하나: "내 크기 블록만 넣고 뺀다"</div>
+      <ul>
+        <li>자기 블록 크기(<code>allocSize_</code>, 예: 128) 하나만 안다</li>
+        <li>쉬는 블록을 SLIST 스택에 쌓는다: <code>Push</code> / <code>Pop</code></li>
+        <li>비었을 때 Pop하면 새 블록을 <code>_aligned_malloc</code>으로 만든다</li>
+        <li>다른 풀이나 요청 크기는 모른다. 헤더의 <code>allocSize_</code>는 0(풀 안)인지만 본다</li>
+        <li>락이 없다. SLIST 원자 연산 + 카운터 <code>Atomic</code></li>
+      </ul>
+    </div>
+  </div>
+  <p class="muted small"><code>MemoryPool</code>은 <code>Memory</code>를 모른다. 그래서 다른 곳에서도 쓸 수 있다: <code>ObjectPoolBase</code>는 <code>Memory</code>를 거치지 않고 자기 전용 <code>MemoryPool</code> 하나를 직접 갖는다.</p>
+</section>
+
+<!-- 2 -->
+<section>
+  <h2>2. Memory 안의 두 멤버: pools_와 poolTable_</h2>
+  <p class="muted"><code>pools_</code>는 풀 48개를 <b>소유</b>하는 목록이고, <code>poolTable_</code>은 블록 크기(인덱스)마다 그 풀을 <b>가리키기만</b> 하는 4097칸 배열이다. 여러 칸이 같은 풀을 가리킨다. 블록 크기를 바꾸거나 풀 타일을 눌러 본다.</p>
+  <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+    <div class="lookup">
+      <label for="bs">블록 크기 (요청 + 16)</label>
+      <input id="bs" type="number" min="1" max="4096" value="116">
+      <input id="bsRange" type="range" min="1" max="4096" value="116" aria-label="블록 크기 슬라이더">
+    </div>
+    <div class="scroll">
+      <div class="memoryBox">
+        <div class="title">Memory (GMemory)</div>
+        <div>
+          <div class="memberTitle">poolTable_[4097] <span>— MemoryPool* 4097칸. 인덱스 = 블록 크기. 소유하지 않음</span></div>
+          <div class="table" id="tbl"></div>
+          <div class="tableRuler"><span style="left:0">0</span><span style="left:25%">1024</span><span style="left:50%">2048</span><span style="left:75%">3072</span><span style="left:100%">4096</span></div>
+        </div>
+        <div class="links"><svg id="lnk" preserveAspectRatio="none" aria-hidden="true"></svg></div>
+        <div>
+          <div class="memberTitle">pools_ : vector&lt;MemoryPool*&gt; <span>— 48개를 new로 만들고 ~Memory()에서 delete. 소유</span></div>
+          <div class="tiles" id="tiles"></div>
+        </div>
+      </div>
+    </div>
+    <div class="result" id="lookupResult" aria-live="polite"></div>
+  </div>
+  <p class="muted small">이렇게 둘로 나눈 이유: 풀을 고를 때 48개를 하나씩 비교하지 않고 <code>poolTable_[blockSize]</code> 한 칸만 읽으면 된다 (O(1)). 표는 생성자에서 한 번 채우고 그 뒤로 읽기만 하므로, 여러 스레드가 동시에 읽어도 락이 필요 없다.</p>
+</section>
+
+<!-- 3 -->
+<section>
+  <h2>3. 호출 한 번 따라가기: Allocate(100) → Release → Allocate(110)</h2>
+  <p class="muted">어느 클래스가 무슨 일을 하는지 칸으로 나눴다. 이름이 같은 두 <code>allocSize_</code>를 주의해서 본다: <b>풀의 allocSize_</b>(128, 풀 블록 크기, 바뀌지 않음)와 <b>헤더의 allocSize_</b>(Memory가 적는 값, 풀 안에서는 0).</p>
+  <div class="panel stepper" id="walk">
+    <div class="controls">
+      <button type="button" data-act="first" aria-label="처음으로">⟲ 처음</button>
+      <button type="button" data-act="prev" aria-label="이전 단계">◀ 이전</button>
+      <button type="button" data-act="next" aria-label="다음 단계">다음 ▶</button>
+      <button type="button" data-act="play" aria-pressed="false">⏯ 자동</button>
+      <span class="pos" data-role="pos"></span>
+    </div>
+    <div class="phase" id="wPhase"></div>
+    <div class="lanes" id="wLanes"></div>
+    <div class="watch" id="wWatch"></div>
+    <div class="blockview">
+      <div class="colhead">블록 (128바이트)</div>
+      <div class="scroll"><div id="wBlock"></div></div>
+      <div class="bnote" id="wBlockNote"></div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section>
+  <h2>4. 여러 크기 섞어 보기</h2>
+  <p class="muted">크기 버튼으로 <code>GMemory-&gt;Allocate</code>를 하고, 받은 포인터의 <code>Release</code>를 눌러 돌려준다. 크기가 달라도 같은 풀로 가면 블록이 재사용된다 (예: 100 해제 후 110 할당). 쓰인 풀만 보인다.</p>
+  <div class="panel" style="display:flex;flex-direction:column;gap:14px">
+    <div class="btns" role="group" aria-label="Allocate 크기">
+      <span class="lbl">Allocate(</span>
+      <button type="button" data-a="8">8</button>
+      <button type="button" data-a="16">16</button>
+      <button type="button" data-a="100">100</button>
+      <button type="button" data-a="110">110</button>
+      <button type="button" data-a="500">500</button>
+      <button type="button" data-a="2000">2000</button>
+      <button type="button" data-a="5000">5000</button>
+      <span class="lbl">)</span>
+      <span class="sep"></span>
+      <button type="button" id="simReset">⟲ 처음</button>
+    </div>
+    <div class="log" id="simLog" aria-live="polite"></div>
+    <div class="simgrid">
+      <div>
+        <div class="colhead">밖에서 쓰는 포인터 (Release를 눌러 반납)</div>
+        <div class="live" id="simLive"></div>
+      </div>
+      <div>
+        <div class="colhead">MemoryPool들 (header_ → 쉬는 블록)</div>
+        <div class="pcards" id="simPools"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section>
+  <h2>5. 생기는 순서와 사라지는 순서</h2>
+  <p class="muted"><code>Memory()</code> 생성자는 <code>AddPool</code>을 48번 부른다. 매번 풀을 하나 만들어 <code>pools_</code>에 넣고, 바로 앞 풀 크기 + 1부터 자기 크기까지 <code>poolTable_</code> 칸을 채운다. 다음을 눌러 표가 채워지는 것을 본다.</p>
+  <div class="panel stepper" id="build">
+    <div class="controls">
+      <button type="button" data-act="first" aria-label="처음으로">⟲ 처음</button>
+      <button type="button" data-act="prev" aria-label="이전 단계">◀ 이전</button>
+      <button type="button" data-act="next" aria-label="다음 단계">다음 ▶</button>
+      <button type="button" data-act="play" aria-pressed="false">⏯ 자동</button>
+      <span class="pos" data-role="pos"></span>
+    </div>
+    <div class="explain" id="bCap" aria-live="polite"></div>
+    <div class="scroll"><div class="bars">
+      <div class="ftable" id="bTable"></div>
+      <div class="tableRuler" style="min-width:520px"><span style="left:0">0</span><span style="left:25%">1024</span><span style="left:50%">2048</span><span style="left:75%">3072</span><span style="left:100%">4096</span></div>
+    </div></div>
+  </div>
+  <div class="panel scroll">
+<pre class="tree"><span class="k">main()</span> 첫 줄: CoreGlobal 생성
+ └ <span class="k">GMemory = new Memory()</span>          <span class="c">// 가장 먼저 만든다 (다른 전역이 할당할 수 있으므로)</span>
+    ├ pools_.reserve(48)
+    ├ AddPool(32) … AddPool(4096)     <span class="c">// 풀 48개 생성 + poolTable_ 채우기</span>
+    └ ASSERT(마지막 풀 == 4096)        <span class="c">// 표 끝까지 빈칸이 없는지 확인</span>
+
+<span class="k">main()</span> 끝: CoreGlobal 소멸
+ └ <span class="k">delete GMemory</span>                    <span class="c">// 가장 마지막에 지운다</span>
+    └ ~Memory(): pools_의 풀마다 delete
+       └ ~MemoryPool(): SLIST에서 하나씩 Pop → _aligned_free  <span class="c">// 쉬는 블록만</span>
+
+<span class="a">아직 Release 안 된 블록</span>              <span class="c">// 풀은 밖에 나간 블록을 모른다 → 그대로 누수</span></pre>
+  </div>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var HEADER = 16, MAX = 4096;
+  /* Memory::Memory()와 같은 반복문 */
+  var pools = [];
+  for (var s = 32; s <= 1024; s += 32) pools.push(s);
+  for (s = 1152; s <= 2048; s += 128) pools.push(s);
+  for (s = 2304; s <= MAX; s += 256) pools.push(s);
+  function poolIdx(block) {
+    if (block > MAX || block < 1) return -1;
+    for (var i = 0; i < pools.length; i++) if (block <= pools[i]) return i;
+    return -1;
+  }
+  function rangeOf(i) { return { from: i === 0 ? 1 : pools[i - 1] + 1, to: pools[i] }; }
+  function hashParam(name) {
+    var m = new RegExp('[#&]' + name + '=([^&]+)').exec(location.hash);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+
+  /* 단계 재생기 (template.html의 Stepper와 같은 방식) */
+  function Stepper(root, count, show, intervalMs, startIndex) {
+    var index = 0, timer = null;
+    var pos = root.querySelector('[data-role="pos"]');
+    var btn = {};
+    root.querySelectorAll('[data-act]').forEach(function (b) { btn[b.getAttribute('data-act')] = b; });
+    function go(i) {
+      index = Math.max(0, Math.min(count - 1, i));
+      show(index);
+      pos.textContent = (index + 1) + ' / ' + count;
+      btn.first.disabled = btn.prev.disabled = index === 0;
+      btn.next.disabled = index === count - 1;
+      if (index === count - 1) stop();
+    }
+    function stop() { if (timer) { clearInterval(timer); timer = null; } btn.play.setAttribute('aria-pressed', 'false'); }
+    btn.first.addEventListener('click', function () { stop(); go(0); });
+    btn.prev.addEventListener('click', function () { stop(); go(index - 1); });
+    btn.next.addEventListener('click', function () { stop(); go(index + 1); });
+    btn.play.addEventListener('click', function () {
+      if (timer) { stop(); return; }
+      if (index === count - 1) go(0);
+      btn.play.setAttribute('aria-pressed', 'true');
+      timer = setInterval(function () { go(index + 1); }, intervalMs);
+    });
+    go(startIndex || 0);
+  }
+
+  /* ── 2. pools_ / poolTable_ ── */
+  var tbl = document.getElementById('tbl'), tiles = document.getElementById('tiles'), lnk = document.getElementById('lnk');
+  var bsIn = document.getElementById('bs'), bsRange = document.getElementById('bsRange'), lookupResult = document.getElementById('lookupResult');
+  var segs = [], tileEls = [];
+  var zero = document.createElement('div');
+  zero.className = 'seg zero'; zero.style.width = (1 / 4097 * 100) + '%'; zero.title = '[0] nullptr';
+  tbl.appendChild(zero);
+  pools.forEach(function (p, i) {
+    var r = rangeOf(i);
+    var seg = document.createElement('div');
+    seg.className = 'seg' + (i % 2 ? ' alt' : '');
+    seg.style.width = ((r.to - r.from + 1) / 4097 * 100) + '%';
+    seg.title = '[' + r.from + ' ~ ' + r.to + '] → Pool ' + p;
+    seg.addEventListener('click', function () { selectPool(i, null); });
+    tbl.appendChild(seg); segs.push(seg);
+    var t = document.createElement('button');
+    t.type = 'button'; t.className = 'tile'; t.textContent = p;
+    t.setAttribute('aria-label', 'pools_[' + i + '] Pool ' + p);
+    t.addEventListener('click', function () { selectPool(i, null); });
+    tiles.appendChild(t); tileEls.push(t);
+  });
+  var curPool = 3, curBlock = 116;
+  function drawLinks() {
+    var i = curPool;
+    if (i < 0) { lnk.innerHTML = ''; return; }
+    var box = lnk.getBoundingClientRect(), sb = segs[i].getBoundingClientRect(), tb = tileEls[i].getBoundingClientRect();
+    if (!box.width) return;
+    var x1 = (sb.left + sb.width / 2 - box.left), x2 = (tb.left + tb.width / 2 - box.left), h = box.height;
+    lnk.setAttribute('viewBox', '0 0 ' + box.width + ' ' + h);
+    lnk.innerHTML = '<path d="M' + x1 + ' 0 C ' + x1 + ' ' + (h * 0.6) + ', ' + x2 + ' ' + (h * 0.4) + ', ' + x2 + ' ' + (h - 4) + '" fill="none" stroke="var(--accent)" stroke-width="2"/>' +
+      '<path d="M' + (x2 - 5) + ' ' + (h - 9) + ' L ' + x2 + ' ' + (h - 2) + ' L ' + (x2 + 5) + ' ' + (h - 9) + '" fill="none" stroke="var(--accent)" stroke-width="2"/>';
+  }
+  function selectPool(i, block) {
+    curPool = i; curBlock = block;
+    segs.forEach(function (sg, k) { sg.classList.toggle('on', k === i); });
+    tileEls.forEach(function (t, k) { t.classList.toggle('on', k === i); });
+    if (i < 0) {
+      lookupResult.innerHTML = '블록 크기 ' + block + '는 표 밖이다.';
+    } else {
+      var r = rangeOf(i);
+      lookupResult.innerHTML = (block ? '<code>poolTable_[' + block + ']</code> → ' : '') +
+        '<b>pools_[' + i + '] = Pool ' + pools[i] + '</b>. 이 풀을 가리키는 칸: <code>[' + r.from + ' ~ ' + r.to + ']</code> ' + (r.to - r.from + 1) + '칸' +
+        (i === 0 ? ' (1~16은 요청 크기가 최소 1이라 실제로는 쓰이지 않는다)' : '') + '.';
+    }
+    drawLinks();
+  }
+  function setBlock(v) {
+    v = Math.max(1, Math.min(MAX, Math.floor(Number(v) || 1)));
+    bsIn.value = v; bsRange.value = v;
+    selectPool(poolIdx(v), v);
+  }
+  bsIn.addEventListener('input', function () { setBlock(bsIn.value); });
+  bsRange.addEventListener('input', function () { setBlock(bsRange.value); });
+  window.addEventListener('resize', drawLinks);
+  setBlock(hashParam('block') || 116);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawLinks);
+
+  /* ── 3. 따라가기 ── */
+  // lane: 0 호출자, 1 Memory, 2 MemoryPool. blk: 블록 상태
+  var NONE = null;
+  var W = [
+    { ph: 'Allocate(100)', on: 0,
+      l: ['<code>PoolAllocator::Alloc(100)</code> → <code>GMemory-&gt;Allocate(100)</code>', '', ''],
+      w: { pool: 128, hdr: '-', use: 0, res: 0 }, blk: NONE, note: '풀은 비어 있다. 블록은 아직 없다.' },
+    { ph: 'Allocate(100)', on: 1,
+      l: ['', '<code>ASSERT_CRASH(size &gt; 0)</code>, 넘침 검사<br>blockSize = 100 + 16 = <b>116</b>', ''],
+      w: { pool: 128, hdr: '-', use: 0, res: 0 }, blk: NONE, note: 'Memory가 헤더 몫 16을 더해 블록 크기를 정한다.' },
+    { ph: 'Allocate(100)', on: 1,
+      l: ['', '116 ≤ 4096 → <code>poolTable_[116]</code><br>= <b>Pool 128</b> (pools_[3])', ''],
+      w: { pool: 128, hdr: '-', use: 0, res: 0 }, blk: NONE, note: '표 한 칸을 읽어 담당 풀을 찾는다. 여기서부터 일이 MemoryPool로 넘어간다.' },
+    { ph: 'Allocate(100)', on: 2,
+      l: ['', '', '<code>Pop()</code>: <code>InterlockedPopEntrySList</code> → nullptr (비었음)<br>→ <code>_aligned_malloc(128, 16)</code><br>useCount_ +1'],
+      w: { pool: 128, hdr: '?', use: 1, res: 0, chg: ['use', 'hdr'] }, blk: { hdr: '?', data: 'g', hot: 'all' },
+      note: 'MemoryPool은 자기 크기 128로만 만든다. 헤더 칸은 아직 아무 값도 적히지 않았다 (Pop은 헤더가 붙지 않은 블록을 돌려준다).' },
+    { ph: 'Allocate(100)', on: 1,
+      l: ['', '<code>AttachHeader(pHeader, 116)</code><br>placement new로 MemoryHeader(116)<br><code>return pHeader + 1</code>', ''],
+      w: { pool: 128, hdr: 116, use: 1, res: 0, chg: ['hdr'] }, blk: { hdr: 116, data: 'd', hot: 'hdr' },
+      note: '헤더의 allocSize_ = 116은 <b>Memory가</b> 적는다. 나중에 Release가 이 값으로 같은 풀을 다시 찾는다.' },
+    { ph: 'Allocate(100)', on: 0,
+      l: ['데이터 주소(블록 시작 + 16)를 받아 Knight 등을 만든다', '', ''],
+      w: { pool: 128, hdr: 116, use: 1, res: 0 }, blk: { hdr: 116, data: 'd', hot: 'data' },
+      note: '호출자는 헤더가 있는지 모른다. 100바이트 + 남는 12바이트 중 100만 쓴다.' },
+    { ph: 'Release(p)', on: 0,
+      l: ['<code>PoolAllocator::Release(p)</code> → nullptr 아님 → <code>GMemory-&gt;Release(p)</code>', '', ''],
+      w: { pool: 128, hdr: 116, use: 1, res: 0 }, blk: { hdr: 116, data: 'd' },
+      note: '돌려줄 때 호출자는 포인터만 준다. 크기는 주지 않는다.' },
+    { ph: 'Release(p)', on: 1,
+      l: ['', '<code>DetachHeader(p)</code> = p − 16<br>blockSize = 헤더 allocSize_ = <b>116</b><br><code>ASSERT_CRASH(116 &gt; 0)</code>', ''],
+      w: { pool: 128, hdr: 116, use: 1, res: 0, chg: ['hdr'] }, blk: { hdr: 116, data: 'd', hot: 'hdr' },
+      note: '크기를 몰라도 헤더를 읽으면 된다. 이것이 Memory가 헤더를 붙이는 이유다.' },
+    { ph: 'Release(p)', on: 1,
+      l: ['', '116 ≤ 4096 → <code>poolTable_[116]</code><br>= <b>Pool 128</b> (Allocate 때와 같은 풀)', ''],
+      w: { pool: 128, hdr: 116, use: 1, res: 0 }, blk: { hdr: 116, data: 'd' },
+      note: 'Allocate와 같은 기준(블록 크기)으로 고르므로, 받은 풀로 정확히 돌아간다.' },
+    { ph: 'Release(p)', on: 2,
+      l: ['', '', '<code>Push(pHeader)</code>: <code>ASSERT_CRASH(allocSize_ &gt; 0)</code><br>헤더 allocSize_ = <b>0</b><br><code>InterlockedPushEntrySList</code><br>useCount_ −1, reserveCount_ +1'],
+      w: { pool: 128, hdr: 0, use: 0, res: 1, chg: ['hdr', 'use', 'res'] }, blk: { hdr: 0, data: 'f', hot: 'hdr', next: true },
+      note: '<code>_aligned_free</code>하지 않고 보관한다. 헤더의 allocSize_ = 0은 "풀 안에 있음" 표시라서, 같은 블록이 또 Push되면 이중 해제로 잡힌다. Next 칸이 다음 빈 블록(지금은 nullptr)을 가리킨다.' },
+    { ph: 'Allocate(110)', on: 1,
+      l: ['<code>GMemory-&gt;Allocate(110)</code>', 'blockSize = 110 + 16 = <b>126</b><br><code>poolTable_[126]</code> = <b>Pool 128</b>', ''],
+      w: { pool: 128, hdr: 0, use: 0, res: 1 }, blk: { hdr: 0, data: 'f', next: true },
+      note: '요청 크기는 다르지만(100 → 110) 블록 크기 97~128은 모두 같은 풀이다.' },
+    { ph: 'Allocate(110)', on: 2,
+      l: ['', '', '<code>Pop()</code>: 꼭대기 블록을 꺼냄 (새 할당 없음)<br><code>ASSERT_CRASH(allocSize_ == 0)</code><br>reserveCount_ −1, useCount_ +1'],
+      w: { pool: 128, hdr: 0, use: 1, res: 0, chg: ['use', 'res'] }, blk: { hdr: 0, data: 'g', hot: 'all' },
+      note: '방금 돌려준 바로 그 블록이 다시 나간다 (LIFO). 같은 주소라 CPU 캐시에 남아 있을 가능성이 높다.' },
+    { ph: 'Allocate(110)', on: 1,
+      l: ['', '<code>AttachHeader(pHeader, 126)</code> → 헤더 allocSize_ = <b>126</b><br><code>return pHeader + 1</code>', ''],
+      w: { pool: 128, hdr: 126, use: 1, res: 0, chg: ['hdr'] }, blk: { hdr: 126, data: 'd', hot: 'hdr', req: 110 },
+      note: '같은 블록, 다른 헤더 값. 풀의 allocSize_(128)는 처음부터 끝까지 그대로다.' }
+  ];
+  var LANES = ['호출자 (PoolAllocator)', 'Memory', 'MemoryPool (128)'];
+  var wPhase = document.getElementById('wPhase'), wLanes = document.getElementById('wLanes'), wWatch = document.getElementById('wWatch');
+  var wBlock = document.getElementById('wBlock'), wBlockNote = document.getElementById('wBlockNote');
+  function blockHtml(b) {
+    if (!b) return '<div class="none">(아직 없음)</div>';
+    var req = b.req || 100;
+    var hh = b.hot === 'hdr' || b.hot === 'all' ? ' hot' : '';
+    var dh = b.hot === 'data' || b.hot === 'all' ? ' hot' : '';
+    var dataCell;
+    if (b.data === 'd') {
+      dataCell = '<div class="bcell d' + dh + '" style="width:' + (req / 128 * 100) + '%"><b>데이터 ' + req + 'B</b></div>' +
+        '<div class="bcell f" style="width:' + ((112 - req) / 128 * 100) + '%">' + (112 - req) + 'B</div>';
+    } else if (b.data === 'f') {
+      dataCell = '<div class="bcell f' + dh + '" style="width:87.5%"><b>쓰지 않음 (풀 안)</b></div>';
+    } else {
+      dataCell = '<div class="bcell g' + dh + '" style="width:87.5%"><b>아직 아무것도 없음</b></div>';
+    }
+    return '<div class="bstrip">' +
+      '<div class="bcell h' + hh + '" style="width:6.25%"><b>Next</b>' + (b.next ? 'null' : '-') + '</div>' +
+      '<div class="bcell h' + hh + '" style="width:6.25%"><b>size</b>' + b.hdr + '</div>' +
+      dataCell + '</div>';
+  }
+  function showWalk(i) {
+    var f = W[i];
+    wPhase.textContent = f.ph;
+    wLanes.innerHTML = LANES.map(function (n, k) {
+      return '<div class="lane' + (k === f.on ? ' on' : '') + '"><div class="ln">' + n + '</div><div class="lt">' + (f.l[k] || '<span class="muted small">대기</span>') + '</div></div>';
+    }).join('');
+    var c = f.w.chg || [];
+    function cell(key, label, val) { return '<div' + (c.indexOf(key) >= 0 ? ' class="chg"' : '') + '><small>' + label + '</small><b>' + val + '</b></div>'; }
+    wWatch.innerHTML = cell('pool', 'MemoryPool::allocSize_', f.w.pool) + cell('hdr', 'MemoryHeader::allocSize_', f.w.hdr) +
+      cell('use', 'useCount_', f.w.use) + cell('res', 'reserveCount_', f.w.res);
+    wBlock.innerHTML = blockHtml(f.blk);
+    wBlockNote.innerHTML = f.note;
+  }
+  var hs = Number(hashParam('step'));
+  Stepper(document.getElementById('walk'), W.length, showWalk, 1800, hs ? hs - 1 : 0);
+
+  /* ── 4. 시뮬레이터 ── */
+  var sim;
+  var simLog = document.getElementById('simLog'), simLive = document.getElementById('simLive'), simPools = document.getElementById('simPools');
+  function simReset() {
+    sim = { pools: {}, order: [], live: [], nextPtr: 1, nextBlk: 1, hotPtr: null, hotPool: null };
+    simRender('아직 아무것도 할당하지 않았다. 풀 48개는 있지만 모두 비어 있다 (블록은 처음 Pop될 때 만들어진다).');
+  }
+  function poolState(size) {
+    if (!sim.pools[size]) { sim.pools[size] = { stack: [], use: 0, res: 0 }; sim.order.push(size); sim.order.sort(function (a, b) { return a - b; }); }
+    return sim.pools[size];
+  }
+  function simAlloc(req) {
+    var block = req + HEADER, name = 'p' + sim.nextPtr++;
+    var msg = '<span class="m">Memory</span>: ' + req + ' + 16 = ' + block + ' → ';
+    if (block > MAX) {
+      sim.live.push({ name: name, req: req, block: block, pool: 0, blk: 'B' + sim.nextBlk++ });
+      msg += '4096 초과 → 풀 없이 <code>_aligned_malloc(' + block + ', 16)</code> → <code>AttachHeader(' + block + ')</code>';
+      sim.hotPool = null;
+    } else {
+      var size = pools[poolIdx(block)], ps = poolState(size), blk;
+      msg += '<code>poolTable_[' + block + ']</code> = Pool ' + size + ' → <span class="p">MemoryPool</span>: ';
+      if (ps.stack.length) { blk = ps.stack.pop(); ps.res--; msg += '쉬던 블록 <b>' + blk + '</b> 재사용'; }
+      else { blk = 'B' + sim.nextBlk++; msg += '비어서 <code>_aligned_malloc(' + size + ')</code>로 새 블록 <b>' + blk + '</b>'; }
+      ps.use++;
+      msg += ' → <span class="m">Memory</span>: <code>AttachHeader(' + block + ')</code>';
+      sim.live.push({ name: name, req: req, block: block, pool: size, blk: blk });
+      sim.hotPool = size;
+    }
+    sim.hotPtr = name;
+    simRender(msg);
+  }
+  function simRelease(name) {
+    var i = -1;
+    sim.live.forEach(function (p, k) { if (p.name === name) i = k; });
+    if (i < 0) return;
+    var p = sim.live.splice(i, 1)[0];
+    var msg = '<span class="m">Memory</span>: ' + p.name + ' − 16 = 헤더, allocSize_ = ' + p.block + ' → ';
+    if (!p.pool) {
+      msg += '4096 초과 → <code>_aligned_free</code>로 바로 해제 (풀에 보관하지 않음)';
+      sim.hotPool = null;
+    } else {
+      var ps = sim.pools[p.pool];
+      ps.stack.push(p.blk); ps.use--; ps.res++;
+      msg += '<code>poolTable_[' + p.block + ']</code> = Pool ' + p.pool + ' → <span class="p">MemoryPool</span>: <code>Push</code>, 헤더 allocSize_ = 0, 블록 <b>' + p.blk + '</b> 보관';
+      sim.hotPool = p.pool;
+    }
+    sim.hotPtr = null;
+    simRender(msg);
+  }
+  function simRender(msg) {
+    simLog.innerHTML = msg;
+    simLive.innerHTML = sim.live.length ? sim.live.map(function (p) {
+      return '<div class="ptr' + (p.pool ? '' : ' big') + (p.name === sim.hotPtr ? ' hot' : '') + '"><span class="nm">' + p.name + '</span>' +
+        '<span class="info">Allocate(' + p.req + ') · 블록 ' + p.blk + ' · 헤더 ' + p.block + ' · ' + (p.pool ? 'Pool ' + p.pool : '직접 할당') + '</span>' +
+        '<button type="button" data-r="' + p.name + '">Release</button></div>';
+    }).join('') : '<div class="none">(없음)</div>';
+    simLive.querySelectorAll('[data-r]').forEach(function (b) { b.addEventListener('click', function () { simRelease(b.getAttribute('data-r')); }); });
+    simPools.innerHTML = sim.order.length ? sim.order.map(function (size) {
+      var ps = sim.pools[size], stk = '<span class="hd">header_</span>';
+      for (var k = ps.stack.length - 1; k >= 0; k--) stk += '<span class="ar">→</span><span class="b">' + ps.stack[k] + ' · 0</span>';
+      stk += '<span class="ar">→</span><span class="muted">nullptr</span>';
+      var r = rangeOf(pools.indexOf(size));
+      return '<div class="pcard' + (size === sim.hotPool ? ' hot' : '') + '"><div class="pt">Pool ' + size + '<span>블록 ' + r.from + '~' + r.to + ' · use ' + ps.use + ' · reserve ' + ps.res + '</span></div><div class="stk">' + stk + '</div></div>';
+    }).join('') : '<div class="none">(아직 쓰인 풀 없음)</div>';
+  }
+  document.querySelectorAll('[data-a]').forEach(function (b) { b.addEventListener('click', function () { simAlloc(Number(b.getAttribute('data-a'))); }); });
+  document.getElementById('simReset').addEventListener('click', simReset);
+  simReset();
+  var hsim = hashParam('sim');
+  if (hsim) hsim.split(',').forEach(function (t) { if (t.charAt(0) === 'r') simRelease(t.slice(1)); else simAlloc(Number(t)); });
+
+  /* ── 5. 생성 순서 ── */
+  // 프레임: 0 = 빈 표, 1~3 = AddPool 32/64/96, 4 = 1024까지, 5 = 1152, 6 = 2048까지, 7 = 2304, 8 = 4096(끝), 9 = 소멸
+  var B = [
+    { upto: -1, cap: '<code>Memory()</code> 시작. <code>poolTable_</code>은 4097칸 모두 nullptr이다 (<code>= {nullptr}</code>).' },
+    { upto: 0, cap: '<code>AddPool(32)</code>: <code>pools_</code>가 비어 있으니 startIndex = 1. 풀을 new로 만들어 <code>pools_</code>에 넣고 <code>[1 ~ 32]</code>를 이 풀로 채운다.' },
+    { upto: 1, cap: '<code>AddPool(64)</code>: startIndex = 마지막 풀 크기 32 + 1 = 33. <code>[33 ~ 64]</code>를 채운다.' },
+    { upto: 2, cap: '<code>AddPool(96)</code>: <code>[65 ~ 96]</code>. 첫 번째 반복문은 32씩 늘며 계속된다.' },
+    { upto: 31, cap: '첫 번째 반복문 끝: <code>AddPool(1024)</code>까지 32개. 표의 <code>[1 ~ 1024]</code>가 채워졌다.' },
+    { upto: 32, cap: '두 번째 반복문: <code>AddPool(1152)</code>, startIndex = 1025. 이제부터 간격이 128이라 한 풀이 128칸을 맡는다.' },
+    { upto: 39, cap: '두 번째 반복문 끝: <code>AddPool(2048)</code>. 풀 40개.' },
+    { upto: 40, cap: '세 번째 반복문: <code>AddPool(2304)</code>, startIndex = 2049. 간격 256.' },
+    { upto: 47, cap: '<code>AddPool(4096)</code>까지 48개. <code>ASSERT_CRASH(pools_.back()-&gt;GetAllocSize() == MAX_ALLOC_SIZE)</code>로 표 끝까지 빈칸이 없음을 확인한다. 이후 표는 읽기만 한다.' },
+    { upto: 47, end: true, cap: '<code>~Memory()</code>: <code>pools_</code>의 풀을 하나씩 delete. 각 <code>~MemoryPool()</code>은 쉬고 있는 블록만 <code>_aligned_free</code>한다. <code>poolTable_</code>은 소유하지 않으니 따로 정리할 것이 없다.' }
+  ];
+  var bTable = document.getElementById('bTable'), bCap = document.getElementById('bCap');
+  function showBuild(i) {
+    var f = B[i], h = '<i style="width:' + (1 / 4097 * 100) + '%;background:var(--free-soft)"></i>';
+    var prevUpto = i > 0 ? B[i - 1].upto : -1;
+    for (var k = 0; k <= f.upto; k++) {
+      var r = rangeOf(k), w = (r.to - r.from + 1) / 4097 * 100;
+      var isNew = !f.end && k > prevUpto;
+      h += '<i class="' + (isNew ? 'new' : (k % 2 ? 'alt' : '')) + '" style="width:' + w + '%" title="[' + r.from + ' ~ ' + r.to + '] Pool ' + pools[k] + '"></i>';
+    }
+    bTable.innerHTML = h;
+    bTable.style.opacity = f.end ? '0.45' : '1';
+    bCap.innerHTML = f.cap;
+  }
+  Stepper(document.getElementById('build'), B.length, showBuild, 1400, 0);
+})();
+</script>
+</body>
+</html>
